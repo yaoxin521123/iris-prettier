@@ -2,7 +2,7 @@
   "name": "iris-prettier-vscode",
   "displayName": "IRIS Prettier",
   "description": "Prettier-style formatter for InterSystems IRIS ObjectScript (.cls)",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "publisher": "iris-prettier",
   "icon": "images/icon.png",
@@ -54,12 +54,24 @@
         "title": "IRIS Prettier: Format Document"
       },
       {
+        "command": "iris-prettier.formatMethod",
+        "title": "IRIS Prettier: 格式化当前方法"
+      },
+      {
         "command": "iris-prettier.formatSelection",
         "title": "IRIS Prettier: 格式化选定内容"
       },
       {
         "command": "iris-prettier.convertDotToBlockSelection",
         "title": "IRIS Prettier: 转换选定内容语法"
+      },
+      {
+        "command": "iris-prettier.previewFormat",
+        "title": "IRIS Prettier: 预览格式化"
+      },
+      {
+        "command": "iris-prettier.previewConvertSyntax",
+        "title": "IRIS Prettier: 预览语法转换"
       },
       {
         "command": "iris-prettier.convertDotToBlock",
@@ -85,14 +97,29 @@
     "menus": {
       "editor/context": [
         {
+          "command": "iris-prettier.previewFormat",
+          "when": "editorLangId == objectscript-class || editorLangId == objectscript || editorLangId == objectscript-int || editorLangId == objectscript-macros",
+          "group": "1_modification@0"
+        },
+        {
+          "command": "iris-prettier.previewConvertSyntax",
+          "when": "editorLangId == objectscript-class || editorLangId == objectscript || editorLangId == objectscript-int || editorLangId == objectscript-macros",
+          "group": "1_modification@1"
+        },
+        {
+          "command": "iris-prettier.formatMethod",
+          "when": "!editorHasSelection && (editorLangId == objectscript-class || editorLangId == objectscript || editorLangId == objectscript-int || editorLangId == objectscript-macros)",
+          "group": "1_modification@2"
+        },
+        {
           "command": "iris-prettier.formatSelection",
           "when": "editorHasSelection && (editorLangId == objectscript-class || editorLangId == objectscript || editorLangId == objectscript-int || editorLangId == objectscript-macros)",
-          "group": "1_modification@2"
+          "group": "1_modification@3"
         },
         {
           "command": "iris-prettier.convertDotToBlockSelection",
           "when": "editorHasSelection && (editorLangId == objectscript-class || editorLangId == objectscript || editorLangId == objectscript-int || editorLangId == objectscript-macros)",
-          "group": "1_modification@3"
+          "group": "1_modification@4"
         }
       ]
     },

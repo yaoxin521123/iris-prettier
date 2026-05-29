@@ -1,5 +1,11 @@
 import * as vscode from "vscode";
-import { format, convertDotSyntaxToBlock, mergeOptions, computeBraceDepthAtLine } from "@iris-prettier/core";
+import {
+  format,
+  convertDotSyntaxToBlock,
+  mergeOptions,
+  computeBraceDepthAtLine,
+  findMethodRangeAtLine,
+} from "@iris-prettier/core";
 
 const EXTENSION_ID = "iris-prettier.iris-prettier-vscode";
 
@@ -35,23 +41,81 @@ function fullRange(doc: vscode.TextDocument): vscode.Range {
   return new vscode.Range(0, 0, last.lineNumber, last.text.length);
 }
 
+function countChangedLines(before: string, after: string): number {
+  const a = before.split(/\r\n|\r|\n/);
+  const b = after.split(/\r\n|\r|\n/);
+  const n = Math.max(a.length, b.length);
+  let changed = 0;
+  for (let i = 0; i < n; i++) {
+    if ((a[i] ?? "") !== (b[i] ?? "")) {
+      changed++;
+    }
+  }
+  return changed;
+}
+
+function logFormatResult(info: {
+  action: string;
+  filePath: string;
+  before: string;
+  after: string;
+  methodName?: string;
+  startLine?: number;
+  endLine?: number;
+}): void {
+  const rangePart =
+    info.startLine !== undefined && info.endLine !== undefined
+      ? `  行 ${info.startLine + 1}–${info.endLine + 1}`
+      : "";
+  const methodPart = info.methodName ? `  方法 ${info.methodName}` : "";
+
+  if (info.before === info.after) {
+    output.appendLine(
+      `[skip] ${info.action} — ${info.filePath}${methodPart}${rangePart} — 无变化`
+    );
+    return;
+  }
+
+  const beforeLines = info.before.split(/\r\n|\r|\n/).length;
+  const afterLines = info.after.split(/\r\n|\r|\n/).length;
+  const changed = countChangedLines(info.before, info.after);
+
+  output.appendLine(`[ok] ${info.action} — ${info.filePath}`);
+  if (info.methodName) {
+    output.appendLine(`  方法: ${info.methodName}`);
+  }
+  if (info.startLine !== undefined && info.endLine !== undefined) {
+    output.appendLine(`  范围: 第 ${info.startLine + 1}–${info.endLine + 1} 行`);
+  }
+  output.appendLine(`  行数: ${beforeLines} → ${afterLines}，变更 ${changed} 行`);
+}
+
+function replaceRangeEdit(
+  document: vscode.TextDocument,
+  range: vscode.Range,
+  after: string,
+  log: Omit<Parameters<typeof logFormatResult>[0], "before" | "after">
+): vscode.TextEdit[] {
+  const before = document.getText(range);
+  logFormatResult({ ...log, before, after });
+  if (after === before) {
+    return [];
+  }
+  return [vscode.TextEdit.replace(range, after)];
+}
+
 function applyText(
   document: vscode.TextDocument,
   after: string,
   label: string
 ): vscode.TextEdit[] {
-  const before = document.getText();
-  if (after === before) {
-    output.appendLine(`[skip] ${document.uri.fsPath} — 无变化`);
-    return [];
-  }
-  output.appendLine(`[ok] ${document.uri.fsPath} (${label})`);
-  return [vscode.TextEdit.replace(fullRange(document), after)];
+  const range = fullRange(document);
+  return replaceRangeEdit(document, range, after, { action: label, filePath: document.uri.fsPath });
 }
 
 function formatDocument(
   document: vscode.TextDocument,
-  formatting?: vscode.FormattingOptions,
+  _formatting?: vscode.FormattingOptions,
   convertDotSyntax = false
 ): vscode.TextEdit[] {
   const merged = mergeOptions({
@@ -59,7 +123,50 @@ function formatDocument(
     convertDotSyntax,
   });
   const after = format(document.getText(), merged);
-  return applyText(document, after, document.languageId);
+  return applyText(document, after, convertDotSyntax ? "format+dot" : "formatDocument");
+}
+
+function documentLines(document: vscode.TextDocument): string[] {
+  return document.getText().split(/\r\n|\r|\n/);
+}
+
+function rangeForLines(
+  document: vscode.TextDocument,
+  startLine: number,
+  endLine: number
+): vscode.Range {
+  return new vscode.Range(
+    startLine,
+    0,
+    endLine,
+    document.lineAt(endLine).text.length
+  );
+}
+
+function formatMethod(
+  document: vscode.TextDocument,
+  lineIndex: number
+): vscode.TextEdit[] {
+  const lines = documentLines(document);
+  const method = findMethodRangeAtLine(lines, lineIndex);
+  if (!method) {
+    output.appendLine(
+      `[skip] formatMethod — ${document.uri.fsPath} — 第 ${lineIndex + 1} 行不在方法内`
+    );
+    return [];
+  }
+
+  const range = rangeForLines(document, method.startLine, method.endLine);
+  const merged = mergeOptions(getOptions());
+  const after = format(document.getText(range), merged);
+
+  return replaceRangeEdit(document, range, after, {
+    action: "formatMethod",
+    filePath: document.uri.fsPath,
+    methodName: method.name,
+    startLine: method.startLine,
+    endLine: method.endLine,
+  });
 }
 
 function expandRangeToFullLines(
@@ -79,27 +186,32 @@ function expandRangeToFullLines(
 function formatSelection(
   document: vscode.TextDocument,
   range: vscode.Range,
-  formatting?: vscode.FormattingOptions
+  _formatting?: vscode.FormattingOptions
 ): vscode.TextEdit[] {
   const fullRange = expandRangeToFullLines(document, range);
   const selected = document.getText(fullRange);
   if (!selected.trim()) {
+    output.appendLine(
+      `[skip] formatSelection — ${document.uri.fsPath} — 选区为空`
+    );
     return [];
   }
-  const formatOptions = selectionFormatOptions(document, fullRange, formatting);
+  const formatOptions = selectionFormatOptions(document, fullRange);
   const after = format(selected, formatOptions);
-  if (after === selected) {
-    return [];
-  }
-  return [vscode.TextEdit.replace(fullRange, after)];
+
+  return replaceRangeEdit(document, fullRange, after, {
+    action: "formatSelection",
+    filePath: document.uri.fsPath,
+    startLine: fullRange.start.line,
+    endLine: fullRange.end.line,
+  });
 }
 
 function selectionFormatOptions(
   document: vscode.TextDocument,
-  fullRange: vscode.Range,
-  formatting?: vscode.FormattingOptions
+  fullRange: vscode.Range
 ): Partial<import("@iris-prettier/core").FormatOptions> {
-  const allLines = document.getText().split(/\r\n|\r|\n/);
+  const allLines = documentLines(document);
   const braceDepth = computeBraceDepthAtLine(allLines, fullRange.start.line);
   return mergeOptions({
     ...getOptions(),
@@ -111,20 +223,178 @@ function selectionFormatOptions(
 function convertDotToBlockSelection(
   document: vscode.TextDocument,
   range: vscode.Range,
-  formatting?: vscode.FormattingOptions
+  _formatting?: vscode.FormattingOptions
 ): vscode.TextEdit[] {
   const fullRange = expandRangeToFullLines(document, range);
   const selected = document.getText(fullRange);
   if (!selected.trim()) {
+    output.appendLine(
+      `[skip] convertDotSelection — ${document.uri.fsPath} — 选区为空`
+    );
     return [];
   }
-  const formatOptions = selectionFormatOptions(document, fullRange, formatting);
+  const formatOptions = selectionFormatOptions(document, fullRange);
   const converted = convertDotSyntaxToBlock(selected, { formatOptions });
   const after = format(converted, formatOptions);
-  if (after === selected) {
-    return [];
+
+  return replaceRangeEdit(document, fullRange, after, {
+    action: "convertDotSelection",
+    filePath: document.uri.fsPath,
+    startLine: fullRange.start.line,
+    endLine: fullRange.end.line,
+  });
+}
+
+interface FormatPlan {
+  range: vscode.Range;
+  before: string;
+  after: string;
+  scopeLabel: string;
+  methodName?: string;
+  startLine?: number;
+  endLine?: number;
+}
+
+/** 按 选中 → 当前方法 → 全文 决定格式化范围 */
+function buildFormatPlan(
+  editor: vscode.TextEditor,
+  opts: { convertDot?: boolean } = {}
+): FormatPlan | null {
+  const { document, selection } = editor;
+  const line = selection.active.line;
+
+  if (!selection.isEmpty) {
+    const fullRange = expandRangeToFullLines(document, selection);
+    const before = document.getText(fullRange);
+    if (!before.trim()) {
+      return null;
+    }
+    const formatOptions = selectionFormatOptions(document, fullRange);
+    const after = opts.convertDot
+      ? format(
+          convertDotSyntaxToBlock(before, { formatOptions }),
+          formatOptions
+        )
+      : format(before, formatOptions);
+    return {
+      range: fullRange,
+      before,
+      after,
+      scopeLabel: "选中内容",
+      startLine: fullRange.start.line,
+      endLine: fullRange.end.line,
+    };
   }
-  return [vscode.TextEdit.replace(fullRange, after)];
+
+  const method = findMethodRangeAtLine(documentLines(document), line);
+  if (method) {
+    const range = rangeForLines(document, method.startLine, method.endLine);
+    const before = document.getText(range);
+    const merged = mergeOptions(getOptions());
+    const after = opts.convertDot
+      ? format(
+          convertDotSyntaxToBlock(before, { formatOptions: merged }),
+          merged
+        )
+      : format(before, merged);
+    return {
+      range,
+      before,
+      after,
+      scopeLabel: `方法 ${method.name}`,
+      methodName: method.name,
+      startLine: method.startLine,
+      endLine: method.endLine,
+    };
+  }
+
+  const range = fullRange(document);
+  const before = document.getText(range);
+  const merged = mergeOptions({
+    ...getOptions(),
+    convertDotSyntax: !!opts.convertDot,
+  });
+  const after = format(before, merged);
+  return {
+    range,
+    before,
+    after,
+    scopeLabel: "全文",
+  };
+}
+
+async function showFormatPreview(
+  editor: vscode.TextEditor,
+  opts: { convertDot?: boolean } = {}
+): Promise<void> {
+  const plan = buildFormatPlan(editor, opts);
+  const filePath = editor.document.uri.fsPath;
+  const action = opts.convertDot ? "previewConvert" : "previewFormat";
+
+  if (!plan) {
+    output.appendLine(`[skip] ${action} — ${filePath} — 无有效范围`);
+    vscode.window.showInformationMessage("IRIS Prettier：无可预览的内容");
+    return;
+  }
+
+  logFormatResult({
+    action,
+    filePath,
+    before: plan.before,
+    after: plan.after,
+    methodName: plan.methodName,
+    startLine: plan.startLine,
+    endLine: plan.endLine,
+  });
+
+  if (plan.before === plan.after) {
+    vscode.window.showInformationMessage("IRIS Prettier：无需更改");
+    return;
+  }
+
+  const lang = editor.document.languageId;
+  const rel = vscode.workspace.asRelativePath(editor.document.uri);
+  const left = await vscode.workspace.openTextDocument({
+    content: plan.before,
+    language: lang,
+  });
+  const right = await vscode.workspace.openTextDocument({
+    content: plan.after,
+    language: lang,
+  });
+  const title = opts.convertDot
+    ? `IRIS Prettier 语法转换预览 · ${plan.scopeLabel} · ${rel}`
+    : `IRIS Prettier 格式化预览 · ${plan.scopeLabel} · ${rel}`;
+
+  await vscode.commands.executeCommand(
+    "vscode.diff",
+    left.uri,
+    right.uri,
+    title
+  );
+
+  const applyLabel = opts.convertDot ? "应用语法转换" : "应用格式化";
+  const choice = await vscode.window.showInformationMessage(
+    `IRIS Prettier：已打开预览（${plan.scopeLabel}）`,
+    applyLabel
+  );
+
+  if (choice === applyLabel) {
+    const success = await editor.edit((builder) => {
+      builder.replace(plan.range, plan.after);
+    });
+    if (success) {
+      output.appendLine(
+        `[ok] applyPreview — ${filePath} — ${plan.scopeLabel}`
+      );
+      output.show(true);
+      vscode.window.showInformationMessage(
+        opts.convertDot
+          ? "IRIS Prettier：语法转换已应用"
+          : "IRIS Prettier：格式化已应用"
+      );
+    }
+  }
 }
 
 async function runEdits(
@@ -202,6 +472,19 @@ export function activate(context: vscode.ExtensionContext): void {
       );
     }),
     vscode.commands.registerCommand(
+      "iris-prettier.formatMethod",
+      async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || !enabled()) return;
+        const line = editor.selection.active.line;
+        await runEdits(
+          editor,
+          formatMethod(editor.document, line),
+          "IRIS Prettier：当前方法已格式化"
+        );
+      }
+    ),
+    vscode.commands.registerCommand(
       "iris-prettier.formatSelection",
       async () => {
         const editor = vscode.window.activeTextEditor;
@@ -244,7 +527,8 @@ export function activate(context: vscode.ExtensionContext): void {
       async () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor || !enabled()) return;
-        const after = convertDotSyntaxToBlock(editor.document.getText(), {
+        const before = editor.document.getText();
+        const after = convertDotSyntaxToBlock(before, {
           formatOptions: getOptions(),
         });
         await runEdits(
@@ -264,6 +548,22 @@ export function activate(context: vscode.ExtensionContext): void {
           formatDocument(editor.document, editorOpts(editor), true),
           "IRIS Prettier：点转块 + 格式化完成"
         );
+      }
+    ),
+    vscode.commands.registerCommand(
+      "iris-prettier.previewFormat",
+      async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || !enabled()) return;
+        await showFormatPreview(editor, { convertDot: false });
+      }
+    ),
+    vscode.commands.registerCommand(
+      "iris-prettier.previewConvertSyntax",
+      async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor || !enabled()) return;
+        await showFormatPreview(editor, { convertDot: true });
       }
     )
   );

@@ -5,6 +5,10 @@ import { fileURLToPath } from "node:url";
 import { format, formatObjectScript } from "./format.js";
 import { computeBraceDepthAtLine } from "./formatter.js";
 import {
+  findAllMethodRanges,
+  findMethodRangeAtLine,
+} from "./methodRange.js";
+import {
   convertDotSyntaxToBlockCore,
   commaToAndInCondition,
   convertLoopQuitToContinue,
@@ -1089,12 +1093,6 @@ describe("comma spacing", () => {
   });
 });
 
-describe("fallback", () => {
-  it("returns text for empty input", () => {
-    expect(format("")).toBe("");
-  });
-});
-
 describe("fragment formatting", () => {
   it("computeBraceDepthAtLine tracks nested blocks", () => {
     const src = `ClassMethod M()
@@ -1113,5 +1111,47 @@ describe("fragment formatting", () => {
     const fragment = "s a=1\ns b=2";
     const out = format(fragment, { fragmentBraceDepth: 2 });
     expect(out).toBe("\t\ts a = 1\n\t\ts b = 2");
+  });
+});
+
+describe("method range", () => {
+  const src = `Class foo Extends %Persistent
+{
+ClassMethod Alpha() As %Status
+{
+Set x=1
+Quit $$$OK
+}
+
+ClassMethod Beta() As %Status
+{
+Set y=2
+}
+}`;
+
+  it("findMethodRangeAtLine locates method by cursor line", () => {
+    const lines = src.split("\n");
+    const beta = findMethodRangeAtLine(lines, 10);
+    expect(beta?.name).toBe("Beta");
+    expect(beta?.startLine).toBe(8);
+    expect(lines[beta!.endLine]?.trim()).toBe("}");
+    const alpha = findMethodRangeAtLine(lines, 4);
+    expect(alpha?.name).toBe("Alpha");
+  });
+
+  it("formats a single method slice", () => {
+    const lines = src.split("\n");
+    const range = findMethodRangeAtLine(lines, 4)!;
+    const slice = lines.slice(range.startLine, range.endLine + 1).join("\n");
+    const out = format(slice);
+    expect(out).toContain("ClassMethod Alpha() As %Status");
+    expect(out).toContain("s x = 1");
+    expect(out).not.toContain("Beta");
+  });
+});
+
+describe("fallback", () => {
+  it("returns text for empty input", () => {
+    expect(format("")).toBe("");
   });
 });

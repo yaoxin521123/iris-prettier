@@ -24,7 +24,7 @@ ext install iris-prettier.iris-prettier-vscode
 
 1. Open a `.cls` file
 2. Right-click → **Format Document**, or `Shift+Alt+F`
-3. Select code → right-click **Format Selection** / **Convert Selection Syntax**
+3. Select code → right-click **Format Selection** / **Convert Selection Syntax**; or use **Preview Format** / **Preview Syntax Convert** to review in a diff before applying
 4. Set as default formatter in `settings.json` (see below)
 
 ## Features
@@ -145,19 +145,26 @@ for {
 
 Also supports: `.e  i` → `elseif`, range `for`, inline `i cond s cmd`, `q:` → `continue:` in loops, and **selection** conversion without a method header.
 
-> Dot-to-block **pre-formats** source before conversion.
+> Dot-to-block **pre-formats** source before conversion. Use **Preview Syntax Convert** to review in a side-by-side diff, then click **Apply** in the notification.
 
 ## Commands
 
 | Action | Command palette | Context menu | Shortcut |
 |--------|-----------------|----------------|----------|
 | Format document | `IRIS Prettier: Format Document` | — | `Shift+Alt+F` |
+| Format current method | `IRIS Prettier: 格式化当前方法` | ✓ | — |
+| Preview format | `IRIS Prettier: 预览格式化` | ✓ | — |
+| Preview syntax convert | `IRIS Prettier: 预览语法转换` | ✓ | — |
 | Format selection | `IRIS Prettier: 格式化选定内容` | ✓ | `Ctrl+K` `Ctrl+F` |
 | Convert selection | `IRIS Prettier: 转换选定内容语法` | ✓ | — |
 | Dot → block | `IRIS Prettier: Convert Dot Syntax to Block` | — | `Ctrl+Shift+Alt+B` |
 | Format + convert | `IRIS Prettier: Format + Convert Dot to Block` | — | `Ctrl+Shift+Alt+F` |
 
 **Selection notes:** range expands to full lines; indent depth is inferred from `{` / `}` above the selection.
+
+**Output log:** open **View → Output → IRIS Prettier** to see method name, line range, and changed line count (`[skip]` when unchanged).
+
+**Preview:** **Preview format** opens a side-by-side diff; use **Apply** in the notification to write changes (syntax conversion preview works the same way).
 
 ## Recommended settings
 
