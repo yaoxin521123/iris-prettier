@@ -2,7 +2,7 @@
   "name": "iris-prettier-vscode",
   "displayName": "IRIS Prettier",
   "description": "Prettier-style formatter for InterSystems IRIS ObjectScript (.cls)",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "publisher": "iris-prettier",
   "icon": "images/icon.png",

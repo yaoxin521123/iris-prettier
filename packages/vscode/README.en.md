@@ -44,6 +44,56 @@ ext install iris-prettier.iris-prettier-vscode
 | Tab indent | Default tabs in method bodies (1 tab = 4 spaces in IRIS) |
 | Selection format | Indent from enclosing `{` / `}` context |
 
+**Example:**
+
+Before:
+
+```objectscript
+ClassMethod Foo() {
+Set ret=1
+If x=1  s y=2
+.i (Ingd<= 0)  s Ret=Ingd q
+.q:(info="")&&(flag="Y")
+}
+```
+
+After:
+
+```objectscript
+ClassMethod Foo() {
+	s ret = 1
+	if x = 1  s y = 2
+	.i (Ingd <= 0)  s Ret = Ingd q
+	.q:(info = "")&&(flag = "Y")
+}
+```
+
+**Block syntax example (non–dot syntax):**
+
+Before:
+
+```objectscript
+ClassMethod M() {
+If (count>0)&&(status="Y") {
+Set ret=1
+} Else {
+Set ret=0
+}
+}
+```
+
+After:
+
+```objectscript
+ClassMethod M() {
+	if (count > 0) && (status = "Y") {
+		s ret = 1
+	} else {
+		s ret = 0
+	}
+}
+```
+
 ### Dot syntax → block
 
 **Before:**
@@ -67,6 +117,29 @@ if $d(^DHCRETA(0,"TypePointer","G",rowid)) {
 }
 if (SQLCODE'=0) {
     s ret=$$SqlErrorRecord^DHCSTERROR(...)
+}
+```
+
+**`for` dot syntax example:**
+
+Before:
+
+```objectscript
+f  s info = $o(^IRIS("info", info)) q:info=""  d
+.s flag = $p(^IRIS("info", info), "^", 1)
+.i flag = "1"  d
+.// todo
+```
+
+After:
+
+```objectscript
+for {
+	s info = $o(^IRIS("info", info)) q:info=""
+	s flag = $p(^IRIS("info", info), "^", 1)
+	if (flag = "1") {
+		// todo
+	}
 }
 ```
 

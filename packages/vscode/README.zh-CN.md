@@ -44,6 +44,56 @@ ext install iris-prettier.iris-prettier-vscode
 | Tab 缩进 | 方法体内默认 Tab，IRIS 约定 1 Tab = 4 空格 |
 | 选中格式化 | 根据方法体嵌套层级自动补全缩进，不只排版字面量 |
 
+**示例：**
+
+格式化前：
+
+```objectscript
+ClassMethod Foo() {
+Set ret=1
+If x=1  s y=2
+.i (Ingd<= 0)  s Ret=Ingd q
+.q:(info="")&&(flag="Y")
+}
+```
+
+格式化后：
+
+```objectscript
+ClassMethod Foo() {
+	s ret = 1
+	if x = 1  s y = 2
+	.i (Ingd <= 0)  s Ret = Ingd q
+	.q:(info = "")&&(flag = "Y")
+}
+```
+
+**块语法示例（非点语法）：**
+
+格式化前：
+
+```objectscript
+ClassMethod M() {
+If (count>0)&&(status="Y") {
+Set ret=1
+} Else {
+Set ret=0
+}
+}
+```
+
+格式化后：
+
+```objectscript
+ClassMethod M() {
+	if (count > 0) && (status = "Y") {
+		s ret = 1
+	} else {
+		s ret = 0
+	}
+}
+```
+
 ### 点语法转块（Dot → Block）
 
 将 IRIS 传统点语法转为块级 `{ }` 写法，例如：
@@ -69,6 +119,29 @@ if $d(^DHCRETA(0,"TypePointer","G",rowid)) {
 }
 if (SQLCODE'=0) {
     s ret=$$SqlErrorRecord^DHCSTERROR(...)
+}
+```
+
+**`for` 点语法示例：**
+
+转换前：
+
+```objectscript
+f  s info = $o(^IRIS("info", info)) q:info=""  d
+.s flag = $p(^IRIS("info", info), "^", 1)
+.i flag = "1"  d
+.// todo
+```
+
+转换后：
+
+```objectscript
+for {
+	s info = $o(^IRIS("info", info)) q:info=""
+	s flag = $p(^IRIS("info", info), "^", 1)
+	if (flag = "1") {
+		// todo
+	}
 }
 ```
 
