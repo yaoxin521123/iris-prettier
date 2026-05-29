@@ -1,0 +1,18 @@
+{
+  "workbench.colorTheme": "InterSystems Default Dark Modern",
+  "editor.insertSpaces": false,
+  "editor.tabSize": 4,
+  "[objectscript-class]": {
+    "editor.defaultFormatter": "iris-prettier.iris-prettier-vscode",
+    "editor.formatOnSave": false
+  },
+  "[objectscript]": {
+    "editor.defaultFormatter": "iris-prettier.iris-prettier-vscode"
+  },
+  "intersystems.language-server.formatting.enabled": false,
+  "objectscript.conn": {
+    "server": "138",
+    "ns": "DHC-APP",
+    "active": false
+  }
+}

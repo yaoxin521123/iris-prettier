@@ -1,0 +1,22 @@
+{
+  "name": "iris-prettier",
+  "private": true,
+  "version": "0.1.1",
+  "description": "Prettier-style formatter for InterSystems IRIS ObjectScript",
+  "scripts": {
+    "build": "npm run build -w @iris-prettier/core && npm run build -w iris-prettier-vscode",
+    "test": "npm run build -w @iris-prettier/core && vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

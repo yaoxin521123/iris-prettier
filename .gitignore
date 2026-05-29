@@ -1,0 +1,11 @@
+node_modules/
+dist/
+packages/vscode/bundled/
+*.vsix
+.DS_Store
+*.log
+.pnpm-store/
+*.tsbuildinfo
+node_modules/.vite/
+tmp-*.js
+tmp-*.txt

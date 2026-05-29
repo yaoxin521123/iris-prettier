@@ -1,0 +1,3 @@
+ClassMethod SetDispEvent()
+{
+}

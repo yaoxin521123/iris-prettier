@@ -1,0 +1,145 @@
+{
+  "name": "iris-prettier-vscode",
+  "displayName": "IRIS Prettier",
+  "description": "Prettier-style formatter for InterSystems IRIS ObjectScript (.cls)",
+  "version": "0.1.1",
+  "type": "module",
+  "publisher": "iris-prettier",
+  "icon": "images/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iris-prettier/iris-prettier.git"
+  },
+  "vsce": {
+    "baseImagesUrl": "https://github.com/iris-prettier/iris-prettier/raw/main/packages/vscode"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Formatters"
+  ],
+  "activationEvents": [
+    "onLanguage:objectscript",
+    "onLanguage:objectscript-class",
+    "onLanguage:objectscript-int",
+    "onLanguage:objectscript-macros"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "configurationDefaults": {
+      "[objectscript-class]": {
+        "editor.defaultFormatter": "iris-prettier.iris-prettier-vscode",
+        "editor.tabSize": 4,
+        "editor.insertSpaces": false
+      },
+      "[objectscript]": {
+        "editor.defaultFormatter": "iris-prettier.iris-prettier-vscode",
+        "editor.tabSize": 4,
+        "editor.insertSpaces": false
+      },
+      "[objectscript-int]": {
+        "editor.defaultFormatter": "iris-prettier.iris-prettier-vscode",
+        "editor.tabSize": 4,
+        "editor.insertSpaces": false
+      },
+      "[objectscript-macros]": {
+        "editor.tabSize": 4,
+        "editor.insertSpaces": false
+      }
+    },
+    "commands": [
+      {
+        "command": "iris-prettier.formatDocument",
+        "title": "IRIS Prettier: Format Document"
+      },
+      {
+        "command": "iris-prettier.formatSelection",
+        "title": "IRIS Prettier: 格式化选定内容"
+      },
+      {
+        "command": "iris-prettier.convertDotToBlockSelection",
+        "title": "IRIS Prettier: 转换选定内容语法"
+      },
+      {
+        "command": "iris-prettier.convertDotToBlock",
+        "title": "IRIS Prettier: Convert Dot Syntax to Block"
+      },
+      {
+        "command": "iris-prettier.formatDocumentWithDotConversion",
+        "title": "IRIS Prettier: Format + Convert Dot to Block"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "iris-prettier.convertDotToBlock",
+        "key": "ctrl+shift+alt+b",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "iris-prettier.formatDocumentWithDotConversion",
+        "key": "ctrl+shift+alt+f",
+        "when": "editorTextFocus"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "iris-prettier.formatSelection",
+          "when": "editorHasSelection && (editorLangId == objectscript-class || editorLangId == objectscript || editorLangId == objectscript-int || editorLangId == objectscript-macros)",
+          "group": "1_modification@2"
+        },
+        {
+          "command": "iris-prettier.convertDotToBlockSelection",
+          "when": "editorHasSelection && (editorLangId == objectscript-class || editorLangId == objectscript || editorLangId == objectscript-int || editorLangId == objectscript-macros)",
+          "group": "1_modification@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "IRIS Prettier",
+      "properties": {
+        "irisPrettier.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable IRIS Prettier formatting for ObjectScript files."
+        },
+        "irisPrettier.printWidth": {
+          "type": "number",
+          "default": 120,
+          "description": "Maximum line width before wrapping concatenations."
+        },
+        "irisPrettier.useTabs": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use tabs for indentation inside method bodies."
+        },
+        "irisPrettier.tabWidth": {
+          "type": "number",
+          "default": 4,
+          "description": "Indent width per level when useTabs is false (IRIS default: 4 spaces per tab)."
+        },
+        "irisPrettier.formatPostfixConditions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Postfix q:/s:/continue:: add spaces inside (...) only; leave unparenthesized conditions unchanged."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "npm run build -w @iris-prettier/core && node scripts/sync-core.mjs && tsc -p tsconfig.json",
+    "build:vsix": "npm run build -w @iris-prettier/core && node scripts/sync-core.mjs && node scripts/bundle.mjs",
+    "package": "npm run build:vsix && vsce package --no-dependencies --allow-missing-repository",
+    "vscode:prepublish": "npm run build:vsix"
+  },
+  "dependencies": {
+    "@iris-prettier/core": "file:./bundled/@iris-prettier/core"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.2.1",
+    "esbuild": "^0.25.12",
+    "typescript": "^5.7.2"
+  }
+}
