@@ -8,10 +8,10 @@
   "icon": "images/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/iris-prettier/iris-prettier.git"
+    "url": "https://github.com/yaoxin521123/iris-prettier.git"
   },
   "vsce": {
-    "baseImagesUrl": "https://github.com/iris-prettier/iris-prettier/raw/main/packages/vscode"
+    "baseImagesUrl": "https://github.com/yaoxin521123/iris-prettier/raw/main/packages/vscode"
   },
   "engines": {
     "vscode": "^1.85.0"
