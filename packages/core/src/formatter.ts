@@ -23,6 +23,7 @@ import {
   lowercaseCommand,
   normalizeContainsBracketSyntax,
 } from "./rules.js";
+import { findMethodRangeAtLine } from "./methodRange.js";
 import { mapCodeSegments } from "./tokenize.js";
 import {
   formatBlockBraceSpacing,
@@ -59,25 +60,30 @@ export function computeBraceDepthAtLine(
   lines: string[],
   lineIndex: number
 ): number {
-  let methodBraceLine = -1;
-  for (let i = Math.min(lineIndex, lines.length - 1); i >= 0; i--) {
-    const trimmed = lines[i]!.trim();
-    if (isMethodHeader(trimmed)) {
-      for (let j = i; j <= lineIndex; j++) {
-        if (lines[j]?.trim() === "{") {
-          methodBraceLine = j;
-          break;
-        }
+  const method = findMethodRangeAtLine(lines, lineIndex);
+  if (!method) {
+    return 0;
+  }
+
+  let braceLine = method.startLine;
+  const headerTrimmed = lines[method.startLine]?.trim() ?? "";
+  if (!/\{\s*$/.test(headerTrimmed)) {
+    braceLine = -1;
+    for (let j = method.startLine + 1; j <= method.endLine; j++) {
+      if (lines[j]?.trim() === "{") {
+        braceLine = j;
+        break;
       }
-      break;
     }
   }
-  if (methodBraceLine < 0) {
+
+  // 方法头、`{` 行、或方法头与 `{` 之间的 /// 文档注释
+  if (braceLine < 0 || lineIndex <= braceLine) {
     return 0;
   }
 
   let depth = 1;
-  for (let i = methodBraceLine + 1; i < lineIndex; i++) {
+  for (let i = braceLine + 1; i < lineIndex; i++) {
     const trimmed = lines[i]!.trim();
     if (!trimmed) {
       continue;
@@ -322,6 +328,12 @@ export function formatObjectScript(
       if (inMethodBody && (prevIsComment || nextIsComment)) {
         output.push("");
       }
+      i++;
+      continue;
+    }
+
+    if (isDocCommentLine(raw) && !inMethodBody) {
+      output.push(formatLineContent(trimmed, options));
       i++;
       continue;
     }

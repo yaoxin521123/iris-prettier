@@ -1112,6 +1112,28 @@ describe("fragment formatting", () => {
     const out = format(fragment, { fragmentBraceDepth: 2 });
     expect(out).toBe("\t\ts a = 1\n\t\ts b = 2");
   });
+
+  it("returns 0 for /// doc comment before ClassMethod after another method", () => {
+    const src = `ClassMethod Other() As %Status
+{
+	q $$$OK
+}
+/// w ##class(DHCDoc.Util.Class).CompileList(.a)
+ClassMethod CompileList() As %Status
+{
+	q ""
+}`;
+    const lines = src.split("\n");
+    const docLine = lines.findIndex((l) => l.startsWith("///"));
+    expect(computeBraceDepthAtLine(lines, docLine)).toBe(0);
+    expect(
+      format("/// w ##class(DHCDoc.Util.Class).CompileList(.a)\nClassMethod CompileList() As %Status\n{", {
+        fragmentBraceDepth: computeBraceDepthAtLine(lines, docLine),
+      })
+    ).toBe(
+      "/// w ##class(DHCDoc.Util.Class).CompileList(.a)\nClassMethod CompileList() As %Status\n{"
+    );
+  });
 });
 
 describe("method range", () => {
