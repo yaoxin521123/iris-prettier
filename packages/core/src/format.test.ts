@@ -1150,6 +1150,92 @@ Set y=2
   });
 });
 
+describe("method doc comments", () => {
+  it("keeps /// doc comment attached to the following method", () => {
+    const src = `Class DHCDoc.Util.Class Extends %RegisteredObject
+{
+/// w ##class(DHCDoc.Util.Class).CompileList(.a)
+ClassMethod CompileList(ByRef tItemArray As %String) As %Status
+{
+	q ""
+}
+/// doc for next method
+ClassMethod Other() As %Status
+{
+	q $$$OK
+}
+}`;
+    const expected = `Class DHCDoc.Util.Class Extends %RegisteredObject
+{
+/// w ##class(DHCDoc.Util.Class).CompileList(.a)
+ClassMethod CompileList(ByRef tItemArray As %String) As %Status
+{
+\tq ""
+}
+/// doc for next method
+ClassMethod Other() As %Status
+{
+\tq $$$OK
+}
+}`;
+    expect(format(src)).toBe(expected);
+  });
+
+  it("indents /// inside method body but not at class member level", () => {
+    const src = `Class DHCDoc.Util.Class Extends %RegisteredObject
+{
+/// w ##class(DHCDoc.Util.Class).CompileList(.a)
+ClassMethod CompileList() As %Status
+{
+\t/// debugger inside method
+\t#dim tSC As %Status = $$$OK
+\tq ""
+}
+}`;
+    const expected = `Class DHCDoc.Util.Class Extends %RegisteredObject
+{
+/// w ##class(DHCDoc.Util.Class).CompileList(.a)
+ClassMethod CompileList() As %Status
+{
+\t/// debugger inside method
+\t#dim tSC As %Status = $$$OK
+\tq ""
+}
+}`;
+    expect(format(src)).toBe(expected);
+  });
+});
+
+describe("try-catch blocks", () => {
+  it("indents try/catch body and branch line correctly", () => {
+    const src = `ClassMethod CompileList(ByRef tItemArray As %String) As %Status
+{
+	s tMsgArray = []
+	try {
+		s tFlags = "cuk"
+		s tGetSource = 0
+		s tSC = ##class(%Atelier.v1.Utils.General).Compile(.tItemArray, tFlags, tGetSource, .tResult)
+	} catch (e) {
+		s tSC = e.AsStatus()
+	}
+	q ""
+}`;
+    const expected = `ClassMethod CompileList(ByRef tItemArray As %String) As %Status
+{
+\ts tMsgArray = []
+\ttry {
+\t\ts tFlags = "cuk"
+\t\ts tGetSource = 0
+\t\ts tSC = ##class(%Atelier.v1.Utils.General).Compile(.tItemArray, tFlags, tGetSource, .tResult)
+\t} catch (e) {
+\t\ts tSC = e.AsStatus()
+\t}
+\tq ""
+}`;
+    expect(format(src)).toBe(expected);
+  });
+});
+
 describe("fallback", () => {
   it("returns text for empty input", () => {
     expect(format("")).toBe("");

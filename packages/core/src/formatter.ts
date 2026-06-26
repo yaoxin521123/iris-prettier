@@ -14,6 +14,7 @@ import {
   isRoutineLabelLine,
   formatRoutineLabelLine,
   isDisabledOrCommentLine,
+  isDocCommentLine,
   isHashSemicolonCommentLine,
   isSemicolonCommentLine,
   isSlashSlashCommentLine,
@@ -46,7 +47,7 @@ function opensBlock(line: string): boolean {
 }
 
 function isCloseElseBranch(line: string): boolean {
-  return /^\}\s*(else|elseif)\b/i.test(line.trim());
+  return /^\}\s*(else|elseif|catch)\b/i.test(line.trim());
 }
 
 function methodIndent(level: number, unit: string): string {
@@ -104,6 +105,9 @@ export function computeBraceDepthAtLine(
 }
 
 function formatLineContent(line: string, options: FormatOptions): string {
+  if (isDocCommentLine(line)) {
+    return line.trimStart();
+  }
   if (isDisabledOrCommentLine(line)) {
     if (isSemicolonCommentLine(line)) {
       return normalizeSemicolonCommentLine(line.trimStart());
@@ -245,11 +249,13 @@ export function formatObjectScript(
     const trimmed = raw.trim();
 
     if (isMethodHeader(trimmed)) {
+      const lastOut = output[output.length - 1] ?? "";
       if (
         options.blankBetweenMethods &&
         output.length > 0 &&
-        output[output.length - 1] !== "" &&
-        output[output.length - 1] !== "{"
+        lastOut !== "" &&
+        lastOut !== "{" &&
+        !isDisabledOrCommentLine(lastOut)
       ) {
         output.push("");
       }
@@ -326,6 +332,8 @@ export function formatObjectScript(
         commentBody = normalizeSemicolonCommentLine(trimmed);
       } else if (isHashSemicolonCommentLine(raw)) {
         commentBody = normalizeHashSemicolonCommentLine(trimmed);
+      } else if (isDocCommentLine(raw)) {
+        commentBody = formatLineContent(trimmed, options);
       }
       output.push(methodIndent(methodBraceDepth, unit) + commentBody);
       i++;

@@ -259,7 +259,7 @@ export function formatMultiCommandSpacingLine(line: string): string {
 export function formatBlockBraceSpacing(line: string): string {
   return line
     .replace(/([^\s{}])\{/g, "$1 {")
-    .replace(/\}(\s*)(else|elseif)\b/gi, "} $2")
+    .replace(/\}(\s*)(else|elseif|catch)\b/gi, "} $2")
     .replace(/\}(\s*)\{/g, "} {");
 }
 
@@ -1536,10 +1536,15 @@ export function isSemicolonCommentLine(line: string): boolean {
   return t.length > 0 && t.startsWith(";") && !t.startsWith("#;");
 }
 
-/** `//` 行注释 */
+/** `//` 行注释（不含 `///` 文档注释） */
 export function isSlashSlashCommentLine(line: string): boolean {
   const t = line.trimStart();
-  return t.startsWith("//");
+  return t.startsWith("//") && !t.startsWith("///");
+}
+
+/** `///` 文档 / 调试注释（类成员级，不随方法体缩进） */
+export function isDocCommentLine(line: string): boolean {
+  return line.trimStart().startsWith("///");
 }
 
 /** 预处理器禁用代码 `#; …`（整段视为注释，不排版、不计入 `{`/`}` 层级） */
@@ -1548,10 +1553,11 @@ export function isHashSemicolonCommentLine(line: string): boolean {
   return t.startsWith("#;");
 }
 
-/** `;` / `//` / `#;` 注释行 */
+/** `;` / `//` / `///` / `#;` 注释行 */
 export function isDisabledOrCommentLine(line: string): boolean {
   return (
     isSemicolonCommentLine(line) ||
+    isDocCommentLine(line) ||
     isSlashSlashCommentLine(line) ||
     isHashSemicolonCommentLine(line)
   );
