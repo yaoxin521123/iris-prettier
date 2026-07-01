@@ -2,7 +2,6 @@ import {
   mapCodeSegments,
   splitByStrings,
   splitTrailingComment,
-  type Segment,
 } from "./tokenize.js";
 
 const COMMAND_ABBREV: Record<string, string> = {
@@ -59,14 +58,16 @@ const STANDALONE_COMMAND_ABBREV = new Set(
 const METHOD_HEADER =
   /^(ClassMethod|Method)\s+(\w+)\s*(\([^)]*\))?\s*(As\s+[\w.%]+)?\s*(\[[^\]]*\])?\s*$/i;
 
-const POSTFIX_CMD = /^(q|continue|b|g|goto|s)\s*:/i;
+const POSTFIX_CMD = /^(q|continue|b|g|goto|s|d)\s*:/i;
 
 /** 后置条件 + 退出返回值（q / continue 等） */
 const POSTFIX_QUIT = /^(q|continue|b|g|goto)$/i;
 /** 后置条件 + 同行 set（s:cond var = val） */
 const POSTFIX_SET = /^s$/i;
+/** 后置条件 + 同行 do（d:cond ##class(...)） */
+const POSTFIX_DO = /^d$/i;
 
-const POSTFIX_CMD_WORD = /\b(q|continue|b|g|goto|s)\s*:/gi;
+const POSTFIX_CMD_WORD = /\b(q|continue|b|g|goto|s|d)\s*:/gi;
 
 /** 仅规范化行首 ObjectScript 命令，避免误改 SetDispEvent 等标识符 */
 const LINE_COMMAND =
@@ -255,15 +256,16 @@ export function formatMultiCommandSpacingLine(line: string): string {
   return out;
 }
 
-/** `for x{` / `}else{` → `for x {` / `} else {` */
+/** `for x{` / `}else{` / `elseif(` → `for x {` / `} else {` / `elseif (` */
 export function formatBlockBraceSpacing(line: string): string {
   return line
     .replace(/([^\s{}])\{/g, "$1 {")
     .replace(/\}(\s*)(else|elseif|catch)\b/gi, "} $2")
+    .replace(/\b(if|elseif|catch)\s*\(/gi, "$1 (")
     .replace(/\}(\s*)\{/g, "} {");
 }
 
-const POSTFIX_CMD_COLON = /\b(q|continue|b|g|goto|s)\s*:/gi;
+const POSTFIX_CMD_COLON = /\b(q|continue|b|g|goto|s|d)\s*:/gi;
 
 /**
  * `:` 两侧加空格（如 `for i = 1:1:n` → `1 : 1 : n`）。
@@ -299,11 +301,12 @@ export function formatColonSpacing(code: string): string {
  * 判断/比较运算符两侧空格：'=、'[、>=、<=、>、<
  * - '> / '< / '= / '[：操作数与 ' 之间有空格，' 与运算符紧贴：DateFrom '= ""
  */
-/** `InjectD["/"`、`TimeFrom[":"` → `InjectD'["/"`（后置包含运算符简写） */
+/** `VIPDesc["VIP"` → `VIPDesc [ "VIP"`（包含运算符：`[` 两侧空格，不加 `'`） */
 export function normalizeContainsBracketSyntax(code: string): string {
   return code
-    .replace(/(\w+)\[\s*"([^"]*)"/g, "$1'[\"$2\"")
-    .replace(/\)\[([%]?[A-Za-z_]\w*)/g, (_m, id: string) => `)'[${id}`);
+    .replace(/(\w+)\s*'\[\s*"([^"]*)"/g, '$1 [ "$2"')
+    .replace(/(\w+)\[\s*"([^"]*)"/g, '$1 [ "$2"')
+    .replace(/\)\[([%]?[A-Za-z_]\w*)/g, (_m, id: string) => `) [${id}`);
 }
 
 export function formatComparisonSpacing(code: string): string {
@@ -313,10 +316,8 @@ export function formatComparisonSpacing(code: string): string {
   result = result.replace(/([\w)\]])'\s*<\s*(\S)/g, "$1 '< $2");
   result = result.replace(/([\w)\]])'\s*=\s*/g, "$1 '= ");
   result = result.replace(/([\w)\]])'\[/g, "$1'[");
-  result = result.replace(/([\w])\s*'\s*\[/g, "$1 '[");
   result = result.replace(/([^\s<>])\s*>=\s*/g, "$1>= ");
   result = result.replace(/([^\s<>])\s*<=\s*/g, "$1<= ");
-  result = result.replace(/\[\s*"/g, '[ "');
   result = result.replace(/(\w+)\s*>\s*(?!=)(\w+)/g, "$1 > $2");
   result = result.replace(/(\w+)\s*<\s*(?!=)(\w+)/g, "$1 < $2");
   return result;
@@ -816,6 +817,21 @@ export function splitPostfixTail(
     }
   }
 
+  // d: — 条件后的 do 目标（##class / $method / 标识符调用等）
+  if (POSTFIX_DO.test(cmdLower)) {
+    const doSplit = trimmed.match(
+      /^(.+?)\s+(?=##class\b|\$\$?|\$[a-zA-Z]|[%]?[A-Za-z_]\w*(?:\^[\w.]*)?\()/i
+    );
+    if (doSplit && looksLikePostfixCondition(doSplit[1]!)) {
+      const cut = doSplit[0].length;
+      const rest = trimmed.slice(cut).trimStart();
+      return {
+        condition: doSplit[1]!.trim(),
+        trailing: rest ? ` ${rest}` : "",
+      };
+    }
+  }
+
   return { condition: trimmed, trailing: "" };
 }
 
@@ -897,37 +913,8 @@ export function unmaskEmbeddedSqlSpans(text: string, spans: string[]): string {
   return text.replace(/__IRIS_EMBSQL_(\d+)__/g, (_, n) => spans[Number(n)] ?? "");
 }
 
-/** 含作为条件分组的 `(...)`（区别于 `$zbitstr(...)` 等函数括号） */
-function hasPostfixConditionParens(code: string): boolean {
-  const t = code.trim();
-  if (/^\(/.test(t)) return true;
-  if (/(?:&&|\|\|)\s*\(/.test(t)) return true;
-  if (/\)\s*(?:&&|\|\|)/.test(t)) return true;
-  return false;
-}
-
-function tightenPostfixOperatorsInCode(seg: string): string {
-  let r = seg;
-  r = r.replace(/'\s+=\s*/g, "'=");
-  r = r.replace(/([^'!<>])\s+=\s*/g, "$1=");
-  r = r.replace(/\s+>=\s+/g, ">=");
-  r = r.replace(/\s+<=\s+/g, "<=");
-  r = r.replace(/([^<>])\s+>\s*(?!=)/g, "$1>");
-  r = r.replace(/([^<>])\s+<\s*(?!=)/g, "$1<");
-  return r;
-}
-
-/** 无括号后置条件：收紧 `=` / `'=` / `>=` 等两侧空格（不用 mapCodeSegments，避免 `=""` 前被加空格） */
-function tightenPostfixOperators(code: string): string {
-  const segments: Segment[] = splitByStrings(code);
-  return segments
-    .map((s) =>
-      s.type === "string" ? s.text : tightenPostfixOperatorsInCode(s.text)
-    )
-    .join("");
-}
-
-function formatCommaSpacingPreservingStrings(code: string): string {
+/** 后置条件括号内：仅比较/赋值运算符两侧加空格（不改逗号、函数名、包含运算符等） */
+function formatPostfixConditionSpacingInCode(code: string): string {
   const segments = splitByStrings(code);
   let out = "";
   for (let i = 0; i < segments.length; i++) {
@@ -936,23 +923,72 @@ function formatCommaSpacingPreservingStrings(code: string): string {
       out += seg.text;
       continue;
     }
-    let text = formatCommaSpacing(seg.text);
-    if (segments[i + 1]?.type === "string" && /,\s*$/.test(text)) {
-      text = text.replace(/,\s*$/, ", ");
-    }
-    if (segments[i - 1]?.type === "string" && /^,\s*/.test(text)) {
-      text = text.replace(/^,\s*/, ", ");
+    let text = formatPostfixOperatorsInCodeSeg(seg.text);
+    if (segments[i + 1]?.type === "string") {
+      if (/^=\s*$/.test(text)) {
+        text = " = ";
+      } else if (/(\w)=\s*$/.test(text) && !/\s=\s*$/.test(text)) {
+        text = text.replace(/(\w)=\s*$/, "$1 = ");
+      }
     }
     out += text;
   }
   return out;
 }
 
-function formatPostfixUnparenthesizedCond(condCode: string, cmd: string): string {
-  const { condition, trailing } = splitPostfixTail(condCode, cmd);
-  let cond = tightenPostfixOperators(condition);
-  cond = formatCommaSpacingPreservingStrings(cond);
-  return cond + trailing;
+function formatPostfixOperatorsInCodeSeg(seg: string): string {
+  let result = seg;
+  result = result.replace(/^\s*<\s*(?!=)/g, " < ");
+  result = result.replace(/^\s*>\s*(?!=)/g, " > ");
+  result = result.replace(/([^\s<>])\s*>=\s*/g, "$1 >= ");
+  result = result.replace(/([^\s<>])\s*<=\s*/g, "$1 <= ");
+  result = result.replace(/([\w)\]])'\s*>\s*(\S)/g, "$1 '> $2");
+  result = result.replace(/([\w)\]])'\s*<\s*(\S)/g, "$1 '< $2");
+  result = result.replace(/([\w)\]])'\s*=\s*/g, "$1 '= ");
+  result = result.replace(/(\w)\s*=\s*"/g, '$1 = "');
+  result = result.replace(/([^\s!<>='])\s*=\s*([^\s"'])/g, "$1 = $2");
+  result = result.replace(/([^\s<>'"])\s*>\s*(?!=)/g, "$1 > ");
+  result = result.replace(/([^\s<>'"])\s*<\s*(?!=)/g, "$1 < ");
+  return result;
+}
+
+/** 条件括号体内：跳过函数调用 `(...)`，仅对其余片段做运算符空格 */
+function formatPostfixParenBodyOperators(code: string): string {
+  if (!/\(/.test(code)) {
+    return formatPostfixConditionSpacingInCode(code);
+  }
+
+  let out = "";
+  let i = 0;
+  while (i < code.length) {
+    if (code[i] === "(") {
+      const end = indexOfBalancedClose(code, i);
+      if (end < 0) {
+        out += formatPostfixConditionSpacingInCode(code.slice(i));
+        break;
+      }
+      if (isFunctionCallOpenParen(code, i)) {
+        out += code.slice(i, end + 1);
+      } else {
+        out += formatPostfixParenGroupSpacing(code.slice(i, end + 1));
+      }
+      i = end + 1;
+    } else {
+      let j = i;
+      while (j < code.length && code[j] !== "(") j++;
+      out += formatPostfixConditionSpacingInCode(code.slice(i, j));
+      i = j;
+    }
+  }
+  return out;
+}
+
+/** 后置条件括号内：仅比较/赋值运算符两侧加空格 */
+function formatPostfixParenGroupSpacing(wrapped: string): string {
+  const t = wrapped.trim();
+  if (!t.startsWith("(") || !t.endsWith(")")) return wrapped;
+  const body = formatPostfixParenBodyOperators(t.slice(1, -1));
+  return `(${body})`;
 }
 
 /** 单个 `(...)` 段：比较运算符两侧空格（含 `<=` / `>=` 左侧） */
@@ -1029,9 +1065,7 @@ function formatParenthesizedGroupsInCode(code: string): string {
 }
 
 /**
- * 后置条件排版（保守）：
- * - 无条件分组括号 → 由 formatPostfixUnparenthesizedCond 收紧运算符
- * - 含条件 `(...)` → 仅格式化括号内条件运算符两侧空格
+ * 后置条件排版：无括号保持原样；含条件 `(...)` 时仅格式化括号内运算符两侧空格。
  */
 function formatPostfixCondSpacing(code: string): string {
   if (!/\(/.test(code)) return code;
@@ -1046,14 +1080,18 @@ function formatPostfixCondSpacing(code: string): string {
         i++;
         continue;
       }
-      out += formatParenGroupSpacing(code.slice(i, end + 1));
+      if (isFunctionCallOpenParen(code, i)) {
+        out += code.slice(i, end + 1);
+      } else {
+        out += formatPostfixParenGroupSpacing(code.slice(i, end + 1));
+      }
       i = end + 1;
     } else {
       out += code[i]!;
       i++;
     }
   }
-  return out.replace(/\s*&&\s*/g, "&&").replace(/\s*\|\|\s*/g, "||");
+  return out;
 }
 
 /** 格式化 `..s:cond tail` / `s:cond tail` 核心（不含行首空白） */
@@ -1067,10 +1105,8 @@ function formatPostfixCore(
   }
 
   const { code: condCode, suffix: commentSuffix } = splitTrailingComment(condRaw);
-  const formatted = hasPostfixConditionParens(condCode)
-    ? formatPostfixCondSpacing(condCode)
-    : formatPostfixUnparenthesizedCond(condCode, cmd);
-  let result = `${dots}${cmd.toLowerCase()}:${formatted}`;
+  const formattedCond = formatPostfixCondSpacing(condCode);
+  let result = `${dots}${cmd}:${formattedCond}`;
 
   if (commentSuffix) {
     result += commentSuffix;

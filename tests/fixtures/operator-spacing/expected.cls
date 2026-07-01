@@ -1,448 +1,1504 @@
-Include websys
-Class websys.DHCChartStyle Extends %RegisteredObject
+Include web.DHCPE.FixParam
+Class web.DHCPE.ResultNew Extends %RegisteredObject
 {
-/// ##Class(websys.DHCChartStyle).GetPatOEUrl()
-
-ClassMethod GetPatOEUrl()
+Parameter FKStation = 4;
+/// Debug: d ##class(%ResultSet).RunQuery("web.DHCPE.ResultNew","FindDiagnosisPatInfo","","2026-06-10","2026-06-15","","","","N","CanGS","2","","dhcpe.diagnosis.audit.csp","","","","","","","^^")
+Query FindDiagnosisPatInfo(RegNo, BDate, EDate, VIP, PatName As %String = "", Group As %String = "", MainDoctor As %String = "", GenStatus As %String = "", HospID As %String = "", OtherPAADM As %String = "", CSPName As %String = "", OnlyRead As %String = "", HaveLock As %String = "", DocName As %String = "", IsResultDate As %String = "", TestFlag As %String = "", MDocName As %String = "", extstr As %String = "") As websys.Query(ROWSPEC = "PaadmID:%String,PAPMINo:%String,AdmDate:%String,Name:%String,Age:%String,Sex:%String,VIPLevel:%String,VIPDesc:%String,GName:%String,GSStatus:%String,ReMark:%String,TCAAuditFlag,TCAMainFlag,TPostPonedFlag,THPNo,GWFlag,LockUserDesc,TRecordDate:%String,TAuditDate:%String,TCancelLockUser:%String,PostPonedInfo:%String,JYFlag:%String,AIFlag:%String,CheckedFlag:%String,TLastSendDetail:%String")
 {
-	s EpisodeID = $g(%request.Data("EpisodeID", 1))
-	s UserId = $g(%session.Data("LOGON.USERID"))
-	s DoctorType = ##class(web.SSUser).GetDefaultCareProviderType(UserId)
-	if (DoctorType '= "DOCTOR") {
-		q "oeorder.oplistcustom.new.csp"
-	}
-	s tmprtn = ##class(web.DHCCPW.MR.Interface).GetInPathWayName(EpisodeID)
-	if tmprtn = "" {
-		q "oeorder.oplistcustom.new.csp"
-	} else { //入径
-		q "dhccpw.mr.clinpathway.csp"
-	}
-
-	;Quit "dhcipbillpatfeeinfo.csp?Wanghc="_EpisodeID //oeorder.oplistcustom.new.csp
 }
-/// 过敏记录  websys.DHCChartStyle.GetAllergyStyle
-/// s val=##class(websys.DHCChartStyle).GetAllergyStyle($G(%request.Data("PatientID",1)),$G(%request.Data("EpisodeID",1)),$G(%request.Data("mradm",1)))
-/// s val=##class(websys.DHCChartStyle).GetAllergyStyle("",9,"")
 
-ClassMethod GetAllergyStyle(PatientID = "", EpisodeID = "", mradm = "")
+ClassMethod FindDiagnosisPatInfoExecute(ByRef qHandle As %Binary, RegNo, BDate, EDate, VIP, PatName As %String = "", Group As %String = "", MainDoctor As %String = "", GenStatus As %String = "", HospID As %String = "", OtherPAADM As %String = "", CSPName As %String = "", OnlyRead As %String = "", HaveLock As %String = "", DocName As %String = "", IsResultDate As %String = "", TestFlag As %String = "", MDocName As %String = "", extstr As %String = "") As %Status
 {
-	;Set ^Wanghc("menu","GetAllergyStyle")=PatientID_","_EpisodeID
-	s:(EpisodeID > 0) PatientID = +^PAADM(EpisodeID)
-	s count = 0
-	// d ##class(%ResultSet).RunQuery("web.DHCPAAllergy","Allergies",PatientID)
-	s rs = ##class(%ResultSet).%New("web.DHCPAAllergy:Allergies")
-	s sc = rs.Execute(PatientID)
-	while (rs.Next()) {
-		s count = count + 1
+	s ^temp("dhcpe", "FindDiagnosisPatInfo") = $lb(RegNo, BDate, EDate, VIP, PatName, Group, MainDoctor, GenStatus, HospID, OtherPAADM, CSPName, OnlyRead, HaveLock, DocName, IsResultDate, TestFlag, MDocName, extstr)
+	s repid = $i(^CacheTemp)
+	if $g(ind) = ""  s ind = 1
+	s LoginDocName = ""
+	if $d(%session) {
+		s langId = %session.Get("LOGON.LANGID")
+		s LoginDocName = %session.Get("LOGON.USERNAME")
 	}
-	d rs.Close()
-	s rs = ""
-	//set count=5
-	if (count > 0) {
-		s obj = ##class(websys.dto.Menu).%New()
-		s obj.className = "x-tab-strip-red"
-		s obj.count = count
-		s val = ##class(ext.util.JsonObject).ObjToJson(obj)
-		q val
+	else
+	{ s langId = ""}
+	s CurUserID = ##class(HS.BL.PECommon).GetDftSessionParam("USERID")
+	s ^tempdhcpe("CurUserID") = CurUserID
+	;s CurUserID=21687
+	if TestFlag = "1"  s CurUserID = 21693
+	s IsZJ = $p(extstr, "^", 1)
+	s AuditDate = $p(extstr, "^", 2)
+	s DistributionDate = $p(extstr, "^", 3)
+	k ^TmpDHCPE("FindDiagnosisPatInfo", CurUserID)
+	s LocID = ##class(HS.BL.PECommon).GetDftSessionParam("LOCID")
+	s GroupID = ##class(HS.BL.PECommon).GetDftSessionParam("GROUPID")
+	//超级安全组标记
+	s SuperGroup = $g(^DHCPESetting("DHCPE", "SuperGroup", LocID))
+	if TestFlag = "1"  s SuperGroup = 75
+	if TestFlag = "1"  s LocID = 15
+	s SuperFlag = 0
+	if SuperGroup = GroupID
+	{
+		s SuperFlag = "1"
 	}
-	q 1
-}
-/// 审核实习医嘱 websys.DHCChartStyle.GetVerifyStyle
-/// s val=##Class(websys.DHCChartStyle).GetVerifyStyle($G(%request.Data("PatientID",1)),$G(%request.Data("EpisodeID",1)),$G(%request.Data("mradm",1)))
-
-ClassMethod GetVerifyStyle(PatientID = "", EpisodeID = "", mradm = "")
-{
-	s count = 0
-	s rs = ##class(%ResultSet).%New("web.DHCOEOrdItem:FindUnActiveOrderItems")
-	s sc = rs.Execute(EpisodeID)
-	while (rs.Next()) {
-		s count = count + 1
-	}
-	d rs.Close()
-	s rs = ""
-	s obj = ##class(websys.dto.Menu).%New()
-	if (count > 0) {
-		s obj.className = "x-tab-strip-red"
-		s obj.count = count
-		s val = ##class(ext.util.JsonObject).ObjToJson(obj)
-		q val
+	if (CurUserID = "21573")&&(LocID = 293)  s SuperFlag = 1 //吴琴琴主任不用分配可以看全部报告
+	if (OtherPAADM '= "")
+	{
+		s PaPatID = +^PAADM(OtherPAADM)
+		s PAPMINo = $p(^PAPER(PaPatID, "PAT", 1), "^", 1)
+		s Name = $p(^PAPER(PaPatID, "ALL"), "^", 1)
+		q:(PatName '= "")&&(PatName'[Name)
+		s Sex = $p(^PAPER(PaPatID, "ALL"), "^", 7)
+		s:Sex'="" Sex=$P(^CT("SEX",Sex),"^",2)
+		s Sex = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc("User.CTSex", Sex, "CTSEXDesc", "cls")
+		s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "未主检"), AuditUser = ""
+		s ID = $o(^User.DHCPEOtherPatientToHPI("OTHPAADMDRIndex", OtherPAADM, 0))
+		q:ID=""
+		s AuditStatus = $lg(^User.DHCPEOtherPatientToHPD(ID), 12) //状态 0：已删除  1：未审核 2：已审核  3：已打印  4：已取
+		s AuditUser = $lg(^User.DHCPEOtherPatientToHPD(ID), 13)
+		s AdmDate = $lg(^User.DHCPEOtherPatientToHPD(ID), 4)
+		s AdmDate = ##class(websys.Conversions).DateLogicalToHtml(AdmDate)
+		s CAAuditFlag = 0, CAMainFlag = 0
+		if (AuditUser '= "")&&(AuditStatus = "2")
+		{
+			s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "已主检")
+			if ##class(web.DHCPE.CA.Main).GetSignName(2, OtherPAADM) '= ""  s CAAuditFlag = 1
+		}
+		if (AuditUser '= "")&&(AuditStatus = "1")  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "未主检")
+		s MainInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "MainDoctor", OtherPAADM))
+		s MainUser = $p(MainInfo, "^", 1)
+		if MainUser '= ""
+		{
+			s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "已初审")
+			if ##class(web.DHCPE.CA.Main).GetSignName(3, OtherPAADM) '= ""  s CAMainFlag = 1
+		}
+		q:(MainDoctor = "Y")&&(GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"未主检"))
+		;i (MainDoctor="Y")&&(GSStatus=##class(websys.Translation).Get(CSPName,"已初审",langId)) s GSStatus="未初审"
+		q:(GenStatus = "NoGS")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"未主检"))
+		q:(GenStatus = "HadGS")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已主检"))
+		q:(GenStatus = "HadMain")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已初审"))
+		s Age = ##class(web.DHCBillInterface).GetPapmiAge(PaPatID, "", HospID)
+		s (VIPLevel, VIPDesc, ReMark, GName) = ""
+		s ArriveFlag = 0
+		s PaadmID = OtherPAADM
+		s IADM = $o(^DHCPEIADM(0, "PAADM", PaadmID, 0))
+		q:IADM=""
+		s AllRejectFlag = ..AllItemReject(IADM)
+		q:(AllRejectFlag = "Y") //到达之后删除或弃检了所有项目的记录 20250702 qiaoyue
+		s PostPonedFlag = ##class(web.DHCPE.OrderPostPoned).GetHadDelayItems(PaadmID)
+		s PostPonedInfo = PostPonedFlag
+		if PostPonedFlag = ""  s PostPonedFlag = "N"
+		else  s PostPonedFlag = "Y"
+		s JYFlag = ##class(web.DHCPE.ResultDiagnosis).GetGSJYFlag(PaadmID)
+		s CheckedFlag = ##class(web.DHCPE.ResultDiagnosis).GetDHCPEStatusFlag("SendAudit", PaadmID)
+		s lastSendDetail = ##class(web.DHCPE.ResultDiagnosisNew).GetLastSendDetail(PaadmID)
+		s ^CacheTemp(repid, ind) = $lb(PaadmID, PAPMINo, AdmDate, Name, Age, Sex, VIPLevel, VIPDesc, GName, GSStatus, ReMark, CAAuditFlag, CAMainFlag, PostPonedFlag, PostPonedInfo, CheckedFlag, lastSendDetail)
+		s ind = ind + 1
+		s qHandle = $lb(0, repid, 0)
+		q $$$OK
 	} else {
-		s obj.className = "x-tab-strip-gray"
-		s obj.disabled = 1
-		//Set obj.count=count
-		s val = ##class(ext.util.JsonObject).ObjToJson(obj)
-		q val
-	}
-	q 0
-}
-/// 病人入径则显示医政组--医嘱录入
-/// s val=##class(websys.DHCChartStyle).IsPathWayRecord()
-/// 医嘱录入(入径)
-/// dhc.side.oe.oerecord.cpw
-/// dhccpw.mr.clinpathway.csp
-/// 条件表达式 s val=##class(websys.DHCChartStyle).IsPathWayRecord()
+		if (RegNo '= "")
+		{
 
-ClassMethod IsPathWayRecord()
-{
-	s EpisodeID = $g(%request.Data("EpisodeID", 1))
-	s val = 1
-	s tmprtn = ##class(web.DHCCPW.MR.Interface).GetInPathWayName(EpisodeID)
-	if tmprtn = "" {
-		s val = 0
-	}
-	q val
-}
-/// 病人[没有]入径则显示医生站--医嘱录入
-/// s val=##class(websys.DHCChartStyle).IsDoctorRecord()
-
-ClassMethod IsDoctorRecord()
-{
-	s EpisodeID = $g(%request.Data("EpisodeID", 1))
-	s val = 1
-	s tmprtn = ##class(web.DHCCPW.MR.Interface).GetInPathWayName(EpisodeID)
-	if tmprtn '= "" {
-		s val = 0
-	}
-	q val
-}
-/// 临床路径菜单判断，如果入径则自动打开菜单
-
-ClassMethod IsCPWStatusToDOC()
-{
-	s EpisodeID = $g(%request.Data("EpisodeID", 1))
-	s val = 1
-	s tmprtn = ##class(DHCMA.CPW.CPS.InterfaceSrv).GetCPWStatusToDOC(EpisodeID)
-	if tmprtn { // 宁夏医科大不自动打开临床路径, 增加NotAutoOpenCPW配置，20200812
-		s obj = ##class(websys.dto.Menu).%New()
-		s autoOpen = 1
-		if $$$GetConfig("websys", "NotAutoOpenCPW") = 1 s autoOpen = 0
-		s obj.autoOpen = autoOpen
-		s val = ##class(ext.util.JsonObject).ObjToJson(obj)
-		q val
-	}
-	q val
-}
-/*对外取目录状态的方法：
-w ##Class(EMRservice.BIEMRService).GetCategoryStatus(6, 100, 112, 3)
-第一个参数 科室ID
-第二个参数 安全组ID
-第三个参数 就诊号
-第四个参数 配置目录分类ID
-返回值：
-{"Visible" : "1", "Sequence" : "2"}
-*/
-/// s val=##class(websys.DHCChartStyle).GetEMRCategoryStatus(1)
-/// 判断病历相关菜单,是否显示,顺序方法
-/// @param CategoryiD编目Id
-/// @param EMRType 病历类型 0：流水病历，1：留观病历，2：抢救病历
-
-ClassMethod GetEMRCategoryStatus(CategoryID = "", EMRType = "")
-{
-	//s val=##class(websys.DHCChartStyle).GetEMRCategoryStatus(21,0)
-
-	s EpisodeID = $g(%request.Data("EpisodeID", 1))
-	s val = 1, autoOpen = 0
-	;Set PatientID = +^PAADM(EpisodeID)
-	s CTLocID = %session.Data("LOGON.CTLOCID")
-	s GroupID = %session.Data("LOGON.GROUPID")
-	;Set ^Wanghc("menu","EprInRecord",CategoryID)=CTLocID_","_GroupID_","_EpisodeID_","_CategoryID
-	s emrJson = ##Class(EMRservice.BIEMRService).GetCategoryStatus(CTLocID, GroupID, EpisodeID, CategoryID)
-	;Set ^Wanghc("menu","EprInRecord",CategoryID,CTLocID,GroupID," "_EpisodeID)=emrJson
-	s emrJsonObj = ##class(ext.util.JsonObject).FromJSON(emrJson)
-	s Visible = emrJsonObj.GetValue("Visible")
-	s Sequence = emrJsonObj.GetValue("Sequence")
-	s Num = emrJsonObj.GetValue("Num")
-	s Num2 = emrJsonObj.GetValue("signNum") // ##Class(EMRservice.BL.BLTemplateSign).GetSignWaitStatus(96, 31, "", "MEDICAL", 1, 456449, 879, 11, "Y")
-	s Num3 = emrJsonObj.GetValue("PrintNum")
-	/*if (CategoryID = 18)||(CategoryID = 19)||(CategoryID = 20) {
-		s obj = ##class(websys.dto.Menu).%New()
-		s obj.sort = CategoryID
-		s val = ##class(ext.util.JsonObject).ObjToJson(obj)
-		q val
-		}*/
-		if (Visible = 0) {
-			s val = 0
-		} else {
-			if (EMRType '= "") {
-				if ##class(websys.Conversions).IsValidMethodName("web.DHCEMPatChange", "GetStayStatus") {
-					//ret=-1表示流水病人
-					s ret = ##class(web.DHCEMPatChange).GetStayStatus(EpisodeID)
-					// 如果是流水病人则隐藏留观与抢救病历
-					//i (EMRType=0) set val=1 流水病历一直打开
-					if (EMRType = 1) && (ret = -1)  s val = 0
-					if (EMRType = 2) && (ret = -1)  s val = 0
-					//i (EMRType=0)&&(ret'=-1) set val=0 // 如果是留观或抢救病人则隐藏流水病历 [6758331]
-					if (EMRType = 0) && (ret = -1)  s autoOpen = 1  //如果是流水病人则要回写病历，此时固定打开门诊病历
-					;Set PatStayMenuStatus = ##class(web.DHCEMInterfaceCom).GetPatStayStatusForMenu(EpisodeID,EMRType)
-					;if (PatStayMenuStatus="N"){
-					;Set val=0
-					;}
+			//优先按照体检号进行查询，查不到数据按照登记号查询
+			s PreID = ""
+			s PreID = ##class(web.DHCPE.HISUICommon).GetPreIDByHPNo(RegNo)
+			if PreID '= "" {
+				s PIBIDR = $p($g(^DHCPEPreIADM(PreID)), "^", 1)
+				if PIBIDR '= ""  s RegNoIndex = $p($g(^DHCPEPreIBI(PIBIDR)), "^", 1)
+			} else {
+				s RegNoIndex = RegNo
+			}
+			s:($L(RegNo)'=11)&($L(RegNo)'=10) RegNoIndex=##class(web.DHCPE.PreIBaseInfo).GetRegNoByIDCard(RegNo)  //身份证返回登记号
+			s:$L(RegNo)=11 RegNoIndex=##class(web.DHCPE.PreIBaseInfo).GetRegNoByTell(RegNo) //手机号码返回登记号
+			s RegNoStr = RegNoIndex
+			s RegNoIndex = $zcvt(RegNoIndex, "U")
+			s:RegNoIndex'["^" PaPatID=$O(^PAPERi("PAPMI_PatNo",RegNoIndex,0))
+			if (RegNoIndex [ "^") {
+				if (PaPatID = "")
+				{
+					s qHandle = $lb(0, repid, 0)
+					q $$$OK
 				}
 			}
-			if val = 1 {
-				s obj = ##class(websys.dto.Menu).%New()
-				s obj.sort = Sequence
-				s obj.autoOpen = autoOpen
-				s obj.count = Num
-				if (Num3 > 0)  s obj.count = Num3 _ "/" _ Num
-				if (Num2 > 0)  s obj.signCount = Num2
-				s val = ##class(ext.util.JsonObject).ObjToJson(obj)
+			for i = 1 : 1 : $l(RegNoStr, "^")
+			{
+				s RegNoIndex = $p(RegNoStr, "^", i)
+				s RegNoIndex = $zcvt(RegNoIndex, "U")
+				s PaPatID = $o(^PAPERi("PAPMI_PatNo", RegNoIndex, 0))
+				s PAPMINo = $p($g(^PAPER(PaPatID, "PAT", 1)), "^", 1)
+				s Name = $p($g(^PAPER(PaPatID, "ALL")), "^", 1)
+				//体检特殊客户类型
+				s SpecialTypeCode = ##class(web.DHCPE.SpecialType).GetSpecialType(PAPMINo)
+				if SpecialTypeCode '= ""  s Name = Name _ "(" _ SpecialTypeCode _ ")"
+				s Sex = $p($g(^PAPER(PaPatID, "ALL")), "^", 7)
+				s:Sex'="" Sex=$P($g(^CT("SEX",Sex)),"^",2)
+				b ;555555
+				//s Age=##class(web.DHCBillInterface).GetPapmiAge(PaPatID,"")
+				s Age = ##class(web.DHCPE.DHCPECommon).GetPapmiAge(PaPatID, HospID)
+				s (VIPLevel, VIPDesc) = ""
+				s ArriveFlag = 0
+				//s LocID=%session.Get("LOGON.CTLOCID")
+				s LocID = ##class(HS.BL.PECommon).GetDftSessionParam("LOCID")
+				s PaadmID = ""
+				for  s PaadmID = $o(^PAPERdr(PaPatID, "ADM", "H", PaadmID), -1) q:PaadmID=""  d
+				.s LocFlag = ##class(web.DHCPE.PreCommon).GetLocFlag("PAADM", PaadmID)
+				.//q:(LocFlag = 1)&&($D(^DHCPESetting("DHCPE","DefaultPAADM",LocID)))
+				.s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "未主检"), AuditUser = "", Status = ""
+				.s SendAuditStatus = ##class(web.DHCPE.ResultDiagnosis).IsCanSendAuditByPAADM(PaadmID)  //可核对 不可核对 已核对
+				.q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "CanCheck")&&(SendAuditStatus '= 0)
+				.q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "CanntCheck")&&(SendAuditStatus '= 1)
+				.q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "HadChecked")&&(SendAuditStatus '= 2)
+				.s ExistFlag = ##class(web.DHCPE.ResultDiagnosis).IsExistSendAuditByPAADM(PaadmID)  //存在核对未通过 1
+				.q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "CanCheck")&&(ExistFlag = 1)  //可核对过滤核对未通过
+				.q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "NoSendAudit")&&(ExistFlag '= 1)
+				.//s GSStatus = ##class(web.DHCPE.ResultDiagnosis).IsAllItemExcByPAADM(PaadmID)  //可初审  不可初审
+				.;q:(GSStatus = "1")&&(GenStatus'["CanNoGS")&&(GenStatus '= "") //过滤不可初审
+				.//b ;1231233123
+				.i ((SendAuditStatus = 2))  s GSStatus = 0
+				.i ((SendAuditStatus '= 2))  s GSStatus = 1  //未粘贴核对不允许主检
+				.i GSStatus = "1"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "不可主检")
+				.i (GSStatus = "0")  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "可主检")
+				.//i (GSStatus = "0")&&(SendAuditStatus = "2")  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "可主检")
+				.//i (GSStatus = "0")&&(SendAuditStatus '= "2")  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "不可主检")
+				.s GSID = ##class(web.DHCPE.ResultDiagnosis).GetSSId(PaadmID)
+				.s (TAuditDate, TAuditTime, TAuditDateTime) = ""
+				.i GSID '= ""  d
+				..s AuditUser = $p($g(^DHCPEGS(GSID, 1)), "^", 5)
+				..s Status = $p($g(^DHCPEGS(GSID, 1)), "^", 9)
+				..i AuditUser '= ""  d
+				...s TAuditDate = $p($g(^DHCPEGS(GSID, 1)), "^", 6)
+				...s:TAuditDate'="" TAuditDate=##class(websys.Conversions).DateLogicalToHtml(TAuditDate)
+				...s TAuditTime = $p($g(^DHCPEGS(GSID, 1)), "^", 7)
+				...s:TAuditTime'="" TAuditTime=##class(websys.Conversions).TimeLogicalToHtml(TAuditTime)
+				...s TAuditDateTime = TAuditDate_" "_TAuditTime
+				.s CAAuditFlag = 0, CAMainFlag = 0
+				.i AuditUser '= ""  d
+				..s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "已主检")
+				..i ##class(web.DHCPE.CA.Main).GetSignName(2, PaadmID) '= ""  s CAAuditFlag = 1
+				.i Status = "1"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "退回主检")
+				.s MainInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "MainDoctor", PaadmID))
+				.s MainUser = $p(MainInfo, "^", 1)
+				.i MainUser '= ""  d
+				..s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "已初审")
+				..i ##class(web.DHCPE.CA.Main).GetSignName(3, PaadmID) '= ""  s CAMainFlag = 1
+				.i Status = "2"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "退回初审")
+				.s LastInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "LastDoctor", PaadmID))
+				.s LastUser = $p(LastInfo, "^", 1)
+				.s:LastUser'="" GSStatus="已终审"
+				.;q:(MainDoctor = "Y")&&(GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"未初审"))
+				.i (MainDoctor = "Y")&&(GSStatus = "已主检")  s GSStatus = "未初审"
+				.i OnlyRead = "Y"  d
+				..s:SendAuditStatus=0 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"可核对")
+				..s:SendAuditStatus=1 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"不可核对")
+				..s:SendAuditStatus=2 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已核对")
+				..s:ExistFlag=1 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"核对不通过")
+				.b ;666666
+				.q:(OnlyRead = "Y")&&(AuditUser '= "")  //粘贴核对过滤已主检
+				.q:(SuperFlag '= "1")&&(OnlyRead = "Y")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","CC",CurUserID,PaadmID)))&&(GSStatus '= "核对不通过")
+				.q:(SuperFlag '= "1")&&(OnlyRead = "Y")&&(GenStatus = "SelfNoSendAudit")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","CC",CurUserID,PaadmID)))   ////只看自己核对未通过记录
+				.q:(GenStatus = "SelfNoSendAudit")&&(ExistFlag '= 1)
+				.s PIADM = $o(^DHCPEIADM(0, "PAADM", PaadmID, 0))
+				.q:PIADM=""
+				.s AllRejectFlag = ..AllItemReject(PIADM)
+				.q:(AllRejectFlag = "Y") //到达之后删除或弃检了所有项目的记录 20250702 qiaoyue
+				.s PreIADM = $p(^DHCPEIADM(PIADM), "^", 4)
+				.q:((PreID '= "")&&(PreID '= PreIADM)) //体检号
+				.//第一个为医生界面自动到达\第二个为打印条码自动到达
+				.s AutoArrived = $g(^DHCPESetting("DHCPE", "AutoArrived", LocID))
+				.s AutoArrived = $p(AutoArrived, "^", 1)
+				.i AutoArrived = "Y"  d
+				..d:ArriveFlag=0 ##class(web.DHCPE.DHCPEIAdm).IAdmArrived(PreIADM)
+				.s ArriveFlag = 1
+				.q:##class(web.DHCPE.ResultEdit).IsArrivedStatu(PaadmID)="0"
+				.s AdmDate = $p(^PAADM(PaadmID), "^", 6)
+				.;q:(AdmDate < StartDate)||(AdmDate > EndDate)
+				.s AdmDate = ##class(websys.Conversions).DateLogicalToHtml(AdmDate)
+				.;d ##class(web.DHCPE.TransResult).TransMain(PaadmID)
+				.s VIPStr = ##class(web.DHCPE.PreCommon).GetVIPLevel("PAADM", PaadmID)
+				.i VIPStr '= ""  d
+				..s VIPLevel = $p(VIPStr, "^", 1)
+				..s VIPDesc = $p(VIPStr, "^", 2)
+				.;q:(VIP '= "")&&(VIP '= VIPLevel)
+				.q:(VIPLevel = "9")&&(OnlyRead = "Y")  //单项体检
+				.;q:(VIPLevel = "9")&&(CSPName = "dhcpe.diagnosis.audit.csp") //总检界面不显示单项体检记录
+				.s:(VIPLevel = "9")&&(CSPName = "dhcpe.diagnosis.audit.csp") GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"不可主检")
+				.s PGADMDR = $p($g(^DHCPEPreIADM(PreIADM)), "^", 2)
+				.s THPNo = $p($g(^DHCPEPreIADM(PreIADM)), "^", 27)
+				.q:THPNo="0100003000"
+				.s GName = ""
+				.i ""'=PGADMDR  d
+				..s GBIDR = $p($g(^DHCPEPreGADM(PGADMDR)), "^", 1)
+				..i ""'=GBIDR s GName = $p($g(^DHCPEPreGBI(GBIDR)), "^", 2)
+				.i $d(^User.DHCPEHighRiskResultI("PAAdmIndex", PaadmID))  s ReMark = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "有高危")
+				.s PostPonedFlag = ##class(web.DHCPE.OrderPostPoned).GetHadDelayItems(PaadmID)
+				.s PostPonedInfo = PostPonedFlag
+				.i PostPonedFlag = ""  s PostPonedFlag = "N"
+				.e  s PostPonedFlag = "Y"
+				.s GWFlag = ""
+				.i $d(^User.DHCPEHighRiskResultI("PAAdmIndex", PaadmID))  s GWFlag = "1"
+				.s LockFlag = 0
+				.s LockUserDesc = ""
+				.s LockUser = ""
+				.i $d(^DHCPEDataEx("DHCPEGeneralSummarize", "LockAudit", PaadmID))  d
+				..s LockFlag = 1
+				..s LockUser = $p(^DHCPEDataEx("DHCPEGeneralSummarize", "LockAudit", PaadmID), "^", 1)
+				..s LockUserDesc = $p($g(^SSU("SSUSR", LockUser)), "^", 2)
+				./***翻译 start***/
+				.s Sex = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc("User.CTSex", Sex, "CTSEXDesc", "cls")
+				.s VIPDesc = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc("User.DHCPEVIPLevel", VIPDesc, "VLDesc", "cls")
+				./***翻译 end***/
+				.;;第一次获取结果时间
+				.s RecordDate = "", RecordTime = "", RecordDateTime = ""
+				.s RecordID = $o(^User.DHCPEAdmRecordManagerI("AdmTypeIndex", PreIADM, "UPDATESTATIONS", 0))
+				.i RecordID '= ""  d
+				..s RecordDate = $lg(^User.DHCPEAdmRecordManagerD(RecordID), 3)
+				..s:RecordDate'="" RecordDate=##class(websys.Conversions).DateLogicalToHtml(RecordDate)
+				..s RecordTime = $lg(^User.DHCPEAdmRecordManagerD(RecordID), 5)
+				..s:RecordTime'="" RecordTime=##class(websys.Conversions).TimeLogicalToHtml(RecordTime)
+				..s RecordDateTime = RecordDate_" "_RecordTime
+				.i GSStatus = "已主检"  s RecordDateTime = ""
+				.s TCancelLockUser = ""
+				.i $d(^DHCPEDataEx("DHCPEGeneralSummarize", "CancelLock", PaadmID))  d
+				..s sort = +$o(^DHCPEDataEx("DHCPEGeneralSummarize", "CancelLock", PaadmID, ""), -1)
+				..s CancelLockInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "CancelLock", PaadmID, sort))
+				..s CancelUserDR = $p(CancelLockInfo, "^", 1)
+				..s:CancelUserDR'="" TCancelLockUser=$p(^SSU("SSUSR",CancelUserDR),"^",2)
+				.q:(HaveLock = "CancelLock")&&(TCancelLockUser = "")
+				.s JYFlag = ##class(web.DHCPE.ResultDiagnosis).GetGSJYFlag(PaadmID)
+				.s AIFlag = "N"
+				.s RPTID = $o(^DHCPERPT(0, "IADM", PIADM, ""))
+				.i RPTID '= ""  d
+				..s RPTAISendInfo = $p($g(^DHCPERPT(RPTID)), "^", 20)
+				..i RPTAISendInfo '= ""  s AIFlag = "Y"
+				.s CheckedFlag = ##class(web.DHCPE.ResultDiagnosis).GetDHCPEStatusFlag("SendAudit", PaadmID)
+				.s lastSendDetail = ##class(web.DHCPE.ResultDiagnosisNew).GetLastSendDetail(PaadmID)
+				.s ^CacheTemp(repid, ind) = $lb(PaadmID, PAPMINo, AdmDate, Name, Age, Sex, VIPLevel, VIPDesc, GName, GSStatus, ReMark, CAAuditFlag, CAMainFlag, PostPonedFlag, THPNo, GWFlag, LockUserDesc, RecordDateTime, TAuditDateTime, TCancelLockUser, PostPonedInfo, JYFlag, AIFlag, CheckedFlag, lastSendDetail)
+				.s ind = ind + 1
 			}
-		}
-		q val
-	}
-
-	/// 是会诊病人且当前为会诊科室时.只能写病历，其它都禁用
-
-ClassMethod IsConsPat(EpisodeID)
-{
-	s PatientID = 0, val = 1
-	;Set ^Wanghc("menu","IsConsPat")=PatientID_","_EpisodeID
-	s:(EpisodeID > 0) PatientID = +^PAADM(EpisodeID)
-	s LocId = %session.Data("LOGON.CTLOCID")
-	s AdmLocId = $p(^PAADM(EpisodeID), "^", 4) //当前科室
-	q:LocId=AdmLocId val
-	s rs = ##class(%ResultSet).%New("web.DHCEMConsInterface:QryPatConsList")
-	s sc = rs.Execute(EpisodeID)
-	while (rs.Next()) {
-		s CLoc = rs.Data("CsLocDesc")
-		s CUserId = rs.Data("CsUserID")
-		s CLocId = ##class(web.CTLoc).GetIdFromCodeDescriptionHosp(CLoc)
-		if (CLocId = LocId) {
-			s obj = ##class(websys.dto.Menu).%New()
-			s obj.disabled = 1
-			s obj.className = "x-tab-strip-gray"
-			s val = ##class(ext.util.JsonObject).ObjToJson(obj)
-			q
-		}
-	}
-	d rs.Close()
-	s rs = ""
-	q val
-}
-/// 公共卫生事件--病人 疑似未处理,感染未上报时 变红 websys.DHCChartStyle.GetPHEStyle()
-
-ClassMethod GetPHEStyle(PatientID, EpisodeID, mradm)
-{
-	s count = 0
-	s myrtn = ##Class(DHCHAI.CUS.IconProfile).CheckIcon(EpisodeID, 0)
-	if myrtn '= "" {
-		s tmpJsonObj = ##class(ext.util.JsonObject).%New()
-		d tmpJsonObj.Clear()
-		d tmpJsonObj.Put("className", "x-tab-strip-red") //.Put("count", 1)
-		q tmpJsonObj.Json()
-	}
-	q ""
-}
-/// d ##class(websys.DHCChartStyle).grantMenu(56864,56878,"住院医师")
-
-ClassMethod grantMenu(stMenuId, endMenuId, groupDesc)
-{
-	s ssGroupID = ##class(web.SSGroup).GetIdFromCodeOrDescription(groupDesc)
-	s eprGroupID = ##class(epr.GroupSettings).GetIdFromGroupId(ssGroupID)
-	s objEprGroupSetting = ##class(epr.GroupSettings).%OpenId(eprGroupID)
-	s security = objEprGroupSetting.MenuSecurity
-	s:security="" security=$zbitstr(50000,0)
-	s:$zbitlen(security)<endMenuId security=$zbitor(security,$zbitstr(endMenuId,0))
-	for i = stMenuId : 1 : endMenuId {
-		s security = $zbitset(security, i, 1)
-	}
-	s objEprGroupSetting.MenuSecurity = security
-	s sc = objEprGroupSetting.%Save()
-	if $$$ISOK( sc)  w "grant menu success"
-	else  w "grant menu fail"
-}
-
-ClassMethod InitMenu()
-{
- &sql(
- 	insert into websys.menu
- 	(
- 		Caption, Name, Type, SubMenuOf, Image
- 	)
- 	values
- 	(
- 		'病历文书', 'dhc.side.emr', 'SideMenu', 1, '../images/uiimages/AppDep.png'
- 	)
- )
- &sql(
- 	insert into websys.menu
- 	(
- 		Caption, Name, Type, SubMenuOf, Image
- 	)
- 	values
- 	(
- 		'诊疗操作', 'dhc.side.oe', 'SideMenu', 1, '../images/uiimages/blood_bag.png'
- 	)
- )
-	s oeId = %ROWID
- &sql(
- 	insert into websys.menu
- 	(
- 		Caption, Name, Type, SubMenuOf, Image
- 	)
- 	values
- 	(
- 		'辅助查询', 'dhc.side.find', 'SideMenu', 1, '../images/uiimages/search.png'
- 	)
- )
-	s findId = %ROWID
- &sql(
- 	insert into websys.menu
- 	(
- 		Caption, Name, Type, SubMenuOf, LinkComponent
- 	)
- 	values
- 	(
- 		'医嘱处理', 'dhc.side.oe.oemanage', 'SideMenu', :oeId, 54468
- 	)
- )
- &sql(
- 	insert into websys.menu
- 	(
- 		Caption, Name, Type, SubMenuOf, LinkComponent
- 	)
- 	values
- 	(
- 		'诊断录入', 'dhc.side.oe.diagrecord', 'SideMenu', :oeId, 54468
- 	)
- )
- &sql(
- 	insert into websys.menu
- 	(
- 		Caption, Name, Type, SubMenuOf, LinkComponent
- 	)
- 	values
- 	(
- 		'医嘱录入', 'dhc.side.oe.oerecord', 'SideMenu', :oeId, 54468
- 	)
- )
- &sql(
- 	insert into websys.menu
- 	(
- 		Caption, Name, Type, SubMenuOf, LinkComponent
- 	)
- 	values
- 	(
- 		'中草药录入', 'dhc.side.oe.herbrecord', 'SideMenu', :oeId, 54468
- 	)
- )
- &sql(
- 	insert into websys.menu
- 	(
- 		Caption, Name, Type, SubMenuOf, LinkComponent
- 	)
- 	values
- 	(
- 		'过敏记录', 'dhc.side.oe.allergy', 'SideMenu', :oeId, 54468
- 	)
- )
- &sql(
- 	insert into websys.menu
- 	(
- 		Caption, Name, Type, SubMenuOf, LinkComponent
- 	)
- 	values
- 	(
- 		'公共卫生事件', 'dhc.side.oe.pubhealth', 'SideMenu', :oeId, 54468
- 	)
- )
- &sql(
- 	insert into websys.menu
- 	(
- 		Caption, Name, Type, SubMenuOf, LinkComponent
- 	)
- 	values
- 	(
- 		'审核实习医嘱', 'dhc.side.oe.studoeaudit', 'SideMenu', :oeId, 54468
- 	)
- )
- &sql(
- 	insert into websys.menu
- 	(
- 		Caption, Name, Type, SubMenuOf
- 	)
- 	values
- 	(
- 		'检验结果', 'dhc.side.find.lablist', 'SideMenu', :findId
- 	)
- )
- &sql(
- 	insert into websys.menu
- 	(
- 		Caption, Name, Type, SubMenuOf
- 	)
- 	values
- 	(
- 		'检查报告', 'dhc.side.find.rislist', 'SideMenu', :findId
- 	)
- )
- &sql(
- 	insert into websys.menu
- 	(
- 		Caption, Name, Type, SubMenuOf
- 	)
- 	values
- 	(
- 		'病理报告', 'dhc.side.find.pislist', 'SideMenu', :findId
- 	)
- )
- &sql(
- 	insert into websys.menu
- 	(
- 		Caption, Name, Type, SubMenuOf
- 	)
- 	values
- 	(
- 		'就诊列表', 'dhc.side.find.admlist', 'SideMenu', :findId
- 	)
- )
-}
-/// w ##class(websys.DHCChartStyle).ImportMenuByEMRCate("住院医师")
-
-ClassMethod ImportMenuByEMRCate(GroupDesc)
-{
-	s stMenuId = 0, endMenuId = 0
-	s parentMenu = "dhc.side.emr"
-	s parentMenuId = ##class(websys.Menu).GetIdFromCodeOrDescription(parentMenu)
-	s seq = ""
-	for {
-		// select ID,CategoryName from emrmeta.emrtemplatecategOry WHERE CategoryType="Category"
-		s seq = $o(^DHCEMRM.EMRTemplateCategoryI("IdxParentCateogryIDAndSeq", " 0", seq))
-		q:seq=""
-		s cateId = ""
-		for {
-			s cateId = $o(^DHCEMRM.EMRTemplateCategoryI("IdxParentCateogryIDAndSeq", " 0", seq, cateId))
-			q:cateId=""
-			s menuCaption = $lg(^DHCEMRM.EMRTemplateCategoryD(cateId), 2)
-			s menuCode = "dhc.side.emr.cate" _ cateId
-			s menuId = $o(^websys.MenuI("UniqueNameIndex", $zu(28, menuCode, 7, 32768), ""))
-			if (menuId > 0) {
-				s MenuObj = ##class(websys.Menu).%OpenId(menuId)
-			} else {
-				s MenuObj = ##class(websys.Menu).%New()
+			s qHandle = $lb(0, repid, 0)
+			q $$$OK
+		} elseif (PatName '= "") {
+			s RegNoStr = ##class(web.DHCPE.PreIADM).GetAllRegNoByName(PatName)
+			if (RegNoStr = "") {
+				s qHandle = $lb(0, repid, 0)
+				q $$$OK
 			}
-			if (MenuObj) {
-				s MenuObj.Caption = menuCaption
-				s MenuObj.Name = menuCode
-				d MenuObj.SubMenuOfSetObjectId(parentMenuId)
-				s MenuObj.ConditionalExpression = "s val=##class(websys.DHCChartStyle).GetEMRCategoryStatus(" _ cateId _ ")"
-				s MenuObj.Target = "EMR"
-				s MenuObj.LinkUrl = "emr.ip.main.csp"
-				s MenuObj.ValueExpression = """" _ "&CategoryID=" _ cateId _ """"
-				s MenuObj.Image = "" // "../images/uiimages/updatediag.png"
-				s MenuObj.IsXhrRefresh = 1
-				s MenuObj.JavascriptFunction = ""
-				d MenuObj.%Save()
+			for i = 1 : 1 : $l(RegNoStr, "^")
+			{
+				s RegNoIndex = $p(RegNoStr, "^", i)
+				s RegNoIndex = $zcvt(RegNoIndex, "U")
+				s PaPatID = $o(^PAPERi("PAPMI_PatNo", RegNoIndex, 0))
+				s PAPMINo = $p($g(^PAPER(PaPatID, "PAT", 1)), "^", 1)
+				s Name = $p($g(^PAPER(PaPatID, "ALL")), "^", 1)
+				//体检特殊客户类型
+				s SpecialTypeCode = ##class(web.DHCPE.SpecialType).GetSpecialType(PAPMINo)
+				if SpecialTypeCode '= ""  s Name = Name _ "(" _ SpecialTypeCode _ ")"
+				s Sex = $p($g(^PAPER(PaPatID, "ALL")), "^", 7)
+				s:Sex'="" Sex=$P($g(^CT("SEX",Sex)),"^",2)
+				b ;555555
+				//s Age=##class(web.DHCBillInterface).GetPapmiAge(PaPatID,"")
+				s Age = ##class(web.DHCPE.DHCPECommon).GetPapmiAge(PaPatID, HospID)
+				s (VIPLevel, VIPDesc) = ""
+				s ArriveFlag = 0
+				//s LocID=%session.Get("LOGON.CTLOCID")
+				s LocID = ##class(HS.BL.PECommon).GetDftSessionParam("LOCID")
+				s PaadmID = ""
+				for  s PaadmID = $o(^PAPERdr(PaPatID, "ADM", "H", PaadmID), -1) q:PaadmID=""  d
+				.s LocFlag = ##class(web.DHCPE.PreCommon).GetLocFlag("PAADM", PaadmID)
+				.//q:(LocFlag = 1)&&($D(^DHCPESetting("DHCPE","DefaultPAADM",LocID)))
+				.s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "未主检"), AuditUser = "", Status = ""
+				.s SendAuditStatus = ##class(web.DHCPE.ResultDiagnosis).IsCanSendAuditByPAADM(PaadmID)  //可核对 不可核对 已核对
+				.q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "CanCheck")&&(SendAuditStatus '= 0)
+				.q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "CanntCheck")&&(SendAuditStatus '= 1)
+				.q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "HadChecked")&&(SendAuditStatus '= 2)
+				.s ExistFlag = ##class(web.DHCPE.ResultDiagnosis).IsExistSendAuditByPAADM(PaadmID)  //存在核对未通过 1
+				.q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "CanCheck")&&(ExistFlag = 1)  //可核对过滤核对未通过
+				.q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "NoSendAudit")&&(ExistFlag '= 1)
+				.//s GSStatus = ##class(web.DHCPE.ResultDiagnosis).IsAllItemExcByPAADM(PaadmID)  //可初审  不可初审
+				.;q:(GSStatus = "1")&&(GenStatus'["CanNoGS")&&(GenStatus '= "") //过滤不可初审
+				.//b ;1231233123
+				.i ((SendAuditStatus = 2))  s GSStatus = 0
+				.i ((SendAuditStatus '= 2))  s GSStatus = 1  //未粘贴核对不允许主检
+				.i GSStatus = "1"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "不可主检")
+				.i (GSStatus = "0")  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "可主检")
+				.//i (GSStatus = "0")&&(SendAuditStatus = "2")  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "可主检")
+				.//i (GSStatus = "0")&&(SendAuditStatus '= "2")  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "不可主检")
+				.s GSID = ##class(web.DHCPE.ResultDiagnosis).GetSSId(PaadmID)
+				.s (TAuditDate, TAuditTime, TAuditDateTime) = ""
+				.i GSID '= ""  d
+				..s AuditUser = $p($g(^DHCPEGS(GSID, 1)), "^", 5)
+				..s Status = $p($g(^DHCPEGS(GSID, 1)), "^", 9)
+				..i AuditUser '= ""  d
+				...s TAuditDate = $p($g(^DHCPEGS(GSID, 1)), "^", 6)
+				...s:TAuditDate'="" TAuditDate=##class(websys.Conversions).DateLogicalToHtml(TAuditDate)
+				...s TAuditTime = $p($g(^DHCPEGS(GSID, 1)), "^", 7)
+				...s:TAuditTime'="" TAuditTime=##class(websys.Conversions).TimeLogicalToHtml(TAuditTime)
+				...s TAuditDateTime = TAuditDate_" "_TAuditTime
+				.s CAAuditFlag = 0, CAMainFlag = 0
+				.i AuditUser '= ""  d
+				..s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "已主检")
+				..i ##class(web.DHCPE.CA.Main).GetSignName(2, PaadmID) '= ""  s CAAuditFlag = 1
+				.i Status = "1"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "退回主检")
+				.s MainInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "MainDoctor", PaadmID))
+				.s MainUser = $p(MainInfo, "^", 1)
+				.i MainUser '= ""  d
+				..s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "已初审")
+				..i ##class(web.DHCPE.CA.Main).GetSignName(3, PaadmID) '= ""  s CAMainFlag = 1
+				.i Status = "2"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "退回初审")
+				.s LastInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "LastDoctor", PaadmID))
+				.s LastUser = $p(LastInfo, "^", 1)
+				.s:LastUser'="" GSStatus="已终审"
+				.;q:(MainDoctor = "Y")&&(GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"未初审"))
+				.i (MainDoctor = "Y")&&(GSStatus = "已主检")  s GSStatus = "未初审"
+				.i OnlyRead = "Y"  d
+				..s:SendAuditStatus=0 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"可核对")
+				..s:SendAuditStatus=1 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"不可核对")
+				..s:SendAuditStatus=2 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已核对")
+				..s:ExistFlag=1 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"核对不通过")
+				.b ;666666
+				.q:(OnlyRead = "Y")&&(AuditUser '= "")  //粘贴核对过滤已主检
+				.q:(SuperFlag '= "1")&&(OnlyRead = "Y")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","CC",CurUserID,PaadmID)))&&(GSStatus '= "核对不通过")
+				.q:(SuperFlag '= "1")&&(OnlyRead = "Y")&&(GenStatus = "SelfNoSendAudit")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","CC",CurUserID,PaadmID)))   ////只看自己核对未通过记录
+				.q:(GenStatus = "SelfNoSendAudit")&&(ExistFlag '= 1)
+				.s PIADM = $o(^DHCPEIADM(0, "PAADM", PaadmID, 0))
+				.q:PIADM=""
+				.s AllRejectFlag = ..AllItemReject(PIADM)
+				.q:(AllRejectFlag = "Y") //到达之后删除或弃检了所有项目的记录 20250702 qiaoyue
+				.s PreIADM = $p(^DHCPEIADM(PIADM), "^", 4)
+				.//第一个为医生界面自动到达\第二个为打印条码自动到达
+				.s AutoArrived = $g(^DHCPESetting("DHCPE", "AutoArrived", LocID))
+				.s AutoArrived = $p(AutoArrived, "^", 1)
+				.i AutoArrived = "Y"  d
+				..d:ArriveFlag=0 ##class(web.DHCPE.DHCPEIAdm).IAdmArrived(PreIADM)
+				.s ArriveFlag = 1
+				.q:##class(web.DHCPE.ResultEdit).IsArrivedStatu(PaadmID)="0"
+				.s AdmDate = $p(^PAADM(PaadmID), "^", 6)
+				.;q:(AdmDate < StartDate)||(AdmDate > EndDate)
+				.s AdmDate = ##class(websys.Conversions).DateLogicalToHtml(AdmDate)
+				.;d ##class(web.DHCPE.TransResult).TransMain(PaadmID)
+				.s VIPStr = ##class(web.DHCPE.PreCommon).GetVIPLevel("PAADM", PaadmID)
+				.i VIPStr '= ""  d
+				..s VIPLevel = $p(VIPStr, "^", 1)
+				..s VIPDesc = $p(VIPStr, "^", 2)
+				.;q:(VIP '= "")&&(VIP '= VIPLevel)
+				.q:(VIPLevel = "9")&&(OnlyRead = "Y")  //单项体检
+				.;q:(VIPLevel = "9")&&(CSPName = "dhcpe.diagnosis.audit.csp") //总检界面不显示单项体检记录
+				.s:(VIPLevel = "9")&&(CSPName = "dhcpe.diagnosis.audit.csp") GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"不可主检")
+				.s PGADMDR = $p($g(^DHCPEPreIADM(PreIADM)), "^", 2)
+				.s THPNo = $p($g(^DHCPEPreIADM(PreIADM)), "^", 27)
+				.q:(THPNo = "0100003000")||(THPNo = "0300016870")||(THPNo = "0300036410")||(THPNo = "0300036919")||(THPNo = "0300042669")||(THPNo = "0300042646")||(THPNo = "0300072500")
+				.s GName = ""
+				.i ""'=PGADMDR  d
+				..s GBIDR = $p($g(^DHCPEPreGADM(PGADMDR)), "^", 1)
+				..i ""'=GBIDR s GName = $p($g(^DHCPEPreGBI(GBIDR)), "^", 2)
+				.i $d(^User.DHCPEHighRiskResultI("PAAdmIndex", PaadmID))  s ReMark = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "有高危")
+				.s PostPonedFlag = ##class(web.DHCPE.OrderPostPoned).GetHadDelayItems(PaadmID)
+				.s PostPonedInfo = PostPonedFlag
+				.i PostPonedFlag = ""  s PostPonedFlag = "N"
+				.e  s PostPonedFlag = "Y"
+				.s GWFlag = ""
+				.i $d(^User.DHCPEHighRiskResultI("PAAdmIndex", PaadmID))  s GWFlag = "1"
+				.s LockFlag = 0
+				.s LockUserDesc = ""
+				.s LockUser = ""
+				.i $d(^DHCPEDataEx("DHCPEGeneralSummarize", "LockAudit", PaadmID))  d
+				..s LockFlag = 1
+				..s LockUser = $p(^DHCPEDataEx("DHCPEGeneralSummarize", "LockAudit", PaadmID), "^", 1)
+				..s LockUserDesc = $p($g(^SSU("SSUSR", LockUser)), "^", 2)
+				./***翻译 start***/
+				.s Sex = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc("User.CTSex", Sex, "CTSEXDesc", "cls")
+				.s VIPDesc = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc("User.DHCPEVIPLevel", VIPDesc, "VLDesc", "cls")
+				./***翻译 end***/
+				.;;第一次获取结果时间
+				.s RecordDate = "", RecordTime = "", RecordDateTime = ""
+				.s RecordID = $o(^User.DHCPEAdmRecordManagerI("AdmTypeIndex", PreIADM, "UPDATESTATIONS", 0))
+				.i RecordID '= ""  d
+				..s RecordDate = $lg(^User.DHCPEAdmRecordManagerD(RecordID), 3)
+				..s:RecordDate'="" RecordDate=##class(websys.Conversions).DateLogicalToHtml(RecordDate)
+				..s RecordTime = $lg(^User.DHCPEAdmRecordManagerD(RecordID), 5)
+				..s:RecordTime'="" RecordTime=##class(websys.Conversions).TimeLogicalToHtml(RecordTime)
+				..s RecordDateTime = RecordDate_" "_RecordTime
+				.i GSStatus = "已主检"  s RecordDateTime = ""
+				.s TCancelLockUser = ""
+				.i $d(^DHCPEDataEx("DHCPEGeneralSummarize", "CancelLock", PaadmID))  d
+				..s sort = +$o(^DHCPEDataEx("DHCPEGeneralSummarize", "CancelLock", PaadmID, ""), -1)
+				..s CancelLockInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "CancelLock", PaadmID, sort))
+				..s CancelUserDR = $p(CancelLockInfo, "^", 1)
+				..s:CancelUserDR'="" TCancelLockUser=$p(^SSU("SSUSR",CancelUserDR),"^",2)
+				.q:(HaveLock = "CancelLock")&&(TCancelLockUser = "")
+				.s JYFlag = ##class(web.DHCPE.ResultDiagnosis).GetGSJYFlag(PaadmID)
+				.s AIFlag = "N"
+				.s RPTID = $o(^DHCPERPT(0, "IADM", PIADM, ""))
+				.i RPTID '= ""  d
+				..s RPTAISendInfo = $p($g(^DHCPERPT(RPTID)), "^", 20)
+				..i RPTAISendInfo '= ""  s AIFlag = "Y"
+				.s CheckedFlag = ##class(web.DHCPE.ResultDiagnosis).GetDHCPEStatusFlag("SendAudit", PaadmID)
+				.s lastSendDetail = ##class(web.DHCPE.ResultDiagnosisNew).GetLastSendDetail(PaadmID)
+				.s ^CacheTemp(repid, ind) = $lb(PaadmID, PAPMINo, AdmDate, Name, Age, Sex, VIPLevel, VIPDesc, GName, GSStatus, ReMark, CAAuditFlag, CAMainFlag, PostPonedFlag, THPNo, GWFlag, LockUserDesc, RecordDateTime, TAuditDateTime, TCancelLockUser, PostPonedInfo, JYFlag, AIFlag, CheckedFlag, lastSendDetail)
+				.s ind = ind + 1
 			}
-			s menuId = MenuObj.%Id()
-			if (stMenuId = 0)  s stMenuId = menuId
-			if (endMenuId = 0)  s endMenuId = menuId
-			if menuId < stMenuId s stMenuId = menuId
-			if menuId > endMenuId s endMenuId = menuId
+			s qHandle = $lb(0, repid, 0)
+			q $$$OK
+		} elseif (DistributionDate '= "")
+		{
+			s DistributionDate = ##class(websys.Conversions).DateHtmlToLogical(DistributionDate)
+			if MainDoctor = "N"  s DistributionType = "AR"
+			if MainDoctor = "Y"  s DistributionType = "MAR"
+			if MainDoctor = "Z"  s DistributionType = "ZAR"
+			s time = ""
+			for  s time = $o(^User.DHCPEWorkDistributionI("WDDocUpdateDateTimeIndex", DistributionType, CurUserID, DistributionDate, time)) q:time=""  d
+			.s DistributionID = ""
+			.f  s DistributionID = $o(^User.DHCPEWorkDistributionI("WDDocUpdateDateTimeIndex", DistributionType, CurUserID, DistributionDate, time, DistributionID)) q:DistributionID=""  d
+			..s paadm = $lg(^User.DHCPEWorkDistributionD(DistributionID), 2)
+			..s IADM = $o(^DHCPEIADM(0, "PAADM", paadm, 0))
+			..s PIADM = $p($g(^DHCPEIADM(IADM)), "^", 4)
+			..s Status = $p($g(^DHCPEIADM(IADM)), "^", 8)
+			..q:Status'="ARRIVED"
+			..s LocFlag = ##class(web.DHCPE.PreCommon).GetLocFlag("PreADM", PIADM, LocID)
+			..q:LocFlag="1"
+			..b:paadm="80187610"
+			..s PGADMDR = $p($g(^DHCPEPreIADM(PIADM)), "^", 2)
+			..s IGSort = 1
+			..s:PGADMDR'="" IGSort=2
+			..q:(+Group '= "0")&&(Group '= PGADMDR)
+			..q:((Group = "ALLG")&&(PGADMDR = ""))
+			..q:((Group = "ALLI")&&(PGADMDR '= ""))
+			..S GName = ""
+			..i ""'=PGADMDR  d
+			...s GBIDR = $p($g(^DHCPEPreGADM(PGADMDR)), "^", 1)
+			...i ""'=GBIDR s GName = $p($g(^DHCPEPreGBI(GBIDR)), "^", 2)
+			..s PBID = $p($g(^DHCPEPreIADM(PIADM)), "^", 1)
+			..s THPNo = $p($g(^DHCPEPreIADM(PIADM)), "^", 27)
+			..s VIPLevel = +##class(web.DHCPE.PreCommon).GetVIPLevel("Pre", PIADM)
+			..q:(VIP '= "")&&(VIP '= VIPLevel)
+			..q:(VIPLevel = "9")&&(OnlyRead = "Y")  //单项体检
+			..;q:(VIPLevel = "9")&&(CSPName = "dhcpe.diagnosis.audit.csp") //总检界面不显示单项体检记录
+			..s:(VIPLevel = "9")&&(CSPName = "dhcpe.diagnosis.audit.csp") GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"不可主检")
+			..s PAPMINo = $p($g(^DHCPEPreIBI(PBID)), "^", 1)
+			..s Name = $p($g(^DHCPEPreIBI(PBID)), "^", 2)
+			..q:(PatName '= "")&&(Name'[PatName)
+			..s PaadmID = ##class(web.DHCPE.DHCPEIAdm).GetPAADMByPADM(PIADM)
+			.. //体检特殊客户类型
+			..s SpecialTypeCode = ##class(web.DHCPE.SpecialType).GetSpecialType(PAPMINo)
+			..i SpecialTypeCode '= ""  s Name = Name _ "(" _ SpecialTypeCode _ ")"
+			..s GSStatus = 1, AuditUser = "", Status = ""
+			..s (TAuditDate, TAuditTime, TAuditDateTime) = ""
+			..s GSID = ##class(web.DHCPE.ResultDiagnosis).GetSSId(PaadmID)
+			..i GSID '= ""  d
+			...s AuditUser = $p($g(^DHCPEGS(GSID, 1)), "^", 5)
+			...s Status = $p($g(^DHCPEGS(GSID, 1)), "^", 9)
+			...i AuditUser '= ""  d
+			....s TAuditDate = $p($g(^DHCPEGS(GSID, 1)), "^", 6)
+			....s:TAuditDate'="" TAuditDate=##class(websys.Conversions).DateLogicalToHtml(TAuditDate)
+			....s TAuditTime = $p($g(^DHCPEGS(GSID, 1)), "^", 7)
+			....s:TAuditTime'="" TAuditTime=##class(websys.Conversions).TimeLogicalToHtml(TAuditTime)
+			....s TAuditDateTime = TAuditDate_" "_TAuditTime
+			..s MainInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "MainDoctor", PaadmID))
+			..s MainUser = $p(MainInfo, "^", 1)
+			..s LastInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "LastDoctor", PaadmID))
+			..s LastUser = $p(LastInfo, "^", 1)
+			..q:(MDocName '= "")&&(MDocName '= MainUser)
+			..q:(OnlyRead = "Y")&&(AuditUser '= "")  //粘贴核对过滤已主检
+			..q:(GenStatus = "HadMain")&&(MainDoctor = "Z")&&((MainUser = "")||(LastUser '= "")) //终审界面查询已初审的
+			..s SendAuditStatus = ##class(web.DHCPE.ResultDiagnosis).IsCanSendAuditByPAADM(PaadmID)  //可核对 不可核对 已核对
+			..q:(MainDoctor '= "")&&(SendAuditStatus '= 2)&(HospID '= "2") //三级审核 都必须核对通过
+			..q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "CanCheck")&&(SendAuditStatus '= 0)
+			..q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "CanntCheck")&&(SendAuditStatus '= 1)
+			..q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "HadChecked")&&(SendAuditStatus '= 2)
+			..s ExistFlag = ##class(web.DHCPE.ResultDiagnosis).IsExistSendAuditByPAADM(PaadmID)  //存在核对未通过1  不存在为0
+			..q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "CanCheck")&&(ExistFlag = 1)  //可核对过滤核对未通过
+			..q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "NoSendAudit")&&(ExistFlag '= 1)
+			..i ((SendAuditStatus = 2))  s GSStatus = 0  //未粘贴核对不允许主检
+			..q:(GSStatus = "1")&&(GenStatus'["CanNoGS")&&(GenStatus '= "")&&(OnlyRead '= "Y") //过滤不可初审
+			..i GSStatus = "1"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "不可主检")
+			..i GSStatus = "0"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "可主检")
+			..s CAAuditFlag = 0, CAMainFlag = 0
+			..i AuditUser '= ""  d
+			...s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "已主检")
+			...i ##class(web.DHCPE.CA.Main).GetSignName(2, PaadmID) '= ""  s CAAuditFlag = 1
+			..i Status = "1"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "退回主检")
+			..i MainUser '= ""  d
+			...s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "已初审")
+			...i ##class(web.DHCPE.CA.Main).GetSignName(3, PaadmID) '= ""  s CAMainFlag = 1
+			..i Status = "2"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "退回初审")
+			..s:LastUser'="" GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已终审")
+			..i OnlyRead = "Y"  d
+			...s:SendAuditStatus=0 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"可核对")
+			...s:SendAuditStatus=1 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"不可核对")
+			...s:SendAuditStatus=2 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已核对")
+			...s:ExistFlag=1 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"核对不通过")
+			..q:(MainDoctor = "Y")&&(GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"未主检"))
+			..;i (MainDoctor = "Y")&&(GSStatus = "已初审")  s GSStatus = "未复审"
+			..;q:(GenStatus = "NoGS")&&(GSStatus '= ##class(websys.Translation).Get("dhcpenewdiagnosis.hisui.csp","未初审",langId))
+			..q:(GenStatus = "CanGS")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"可主检"))
+			..q:(GenStatus = "CanNoGS")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"不可主检"))
+			..q:(GenStatus = "HadGS")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已主检"))
+			..q:(GenStatus = "HadMain")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已初审"))
+			..q:(GenStatus = "HadLast")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已终审"))
+			..q:(GenStatus = "HadMainBack")&&(Status '= "1")
+			..q:(GenStatus = "HadLastBack")&&(Status '= "2")
+			..q:(SuperFlag '= "1")&&(OnlyRead = "Y")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","CC",CurUserID,PaadmID)))&&(GSStatus '= "核对不通过")
+			..q:(SuperFlag '= "1")&&(OnlyRead = "Y")&&(GenStatus = "SelfNoSendAudit")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","CC",CurUserID,PaadmID)))   ////只看自己核对未通过记录
+			..q:(GenStatus = "SelfNoSendAudit")&&(ExistFlag '= 1)
+			..//b ;GSStatus
+			..s PaPatID = $p($g(^PAADM(PaadmID)), "^", 1)
+			..s Sex = $p($g(^PAPER(PaPatID, "ALL")), "^", 7)
+			..s:Sex'="" Sex=$P($g(^CT("SEX",Sex)),"^",2)
+			..//s Age = ##class(web.DHCBillInterface).GetPapmiAge(PaPatID, "")
+			..s Age = ##class(web.DHCPE.DHCPECommon).GetPapmiAge(PaPatID, HospID)
+			..s (VIPLevel, VIPDesc) = ""
+			..s AdmDate = $p($g(^PAADM(PaadmID)), "^", 6)
+			..s AdmDate = ##class(websys.Conversions).DateLogicalToHtml(AdmDate)
+			..s VIPStr = ##class(web.DHCPE.PreCommon).GetVIPLevel("PAADM", PaadmID)
+			..i VIPStr '= ""  d
+			...s VIPLevel = $p(VIPStr, "^", 1)
+			...s VIPDesc = $p(VIPStr, "^", 2)
+			..q:(VIPLevel = "9")&&(OnlyRead = "Y")  //单项体检
+			..s ReMark = ""
+			..i $d(^User.DHCPEHighRiskResultI("PAAdmIndex", PaadmID))  s ReMark = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "有高危")
+			..s PostPonedFlag = ##class(web.DHCPE.OrderPostPoned).GetHadDelayItems(PaadmID)
+			..s PostPonedInfo = PostPonedFlag
+			..i PostPonedFlag = ""  s PostPonedFlag = "N"
+			..e  s PostPonedFlag = "Y"
+			..s GWFlag = ""
+			..i $d(^User.DHCPEHighRiskResultI("PAAdmIndex", PaadmID))  s GWFlag = "1"
+			../***翻译 start***/
+			..s Sex = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc("User.CTSex", Sex, "CTSEXDesc", "cls")
+			..s VIPDesc = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc("User.DHCPEVIPLevel", VIPDesc, "VLDesc", "cls")
+			..s VIPSort = 2
+			..s:(VIPDesc["VIP")||(VIPDesc["贵宾")||(VIPDesc["干部") VIPSort=1
+			../***翻译 end***/
+			..s JYSort = "9999999"
+			..s JYFlag = ##class(web.DHCPE.ResultDiagnosis).GetGSJYFlag(PaadmID)
+			..i JYFlag = 1  s JYSort = 1
+			..s LockFlag = 0
+			..s LockUserDesc = ""
+			..s LockUser = ""
+			..i $d(^DHCPEDataEx("DHCPEGeneralSummarize", "LockAudit", PaadmID))  d
+			...s LockFlag = 1
+			...s LockUser = $p(^DHCPEDataEx("DHCPEGeneralSummarize", "LockAudit", PaadmID), "^", 1)
+			...s LockUserDesc = $p($g(^SSU("SSUSR", LockUser)), "^", 2)
+			..s LockSort = "9999999"
+			..i LockFlag = "1"  s LockSort = "3"
+			..i CurUserID = LockUser s LockSort = "2"
+			..q:(HaveLock = "HaveLock")&&(LockFlag = 0)
+			..q:(DocName '= "")&&(LockUser '= DocName)
+			..;;第一次获取结果时间
+			..s RecordDate = "", RecordTime = "", RecordDateTime = "", RecordUser = "", RecordSort = "Z"
+			..s RecordID = $o(^User.DHCPEAdmRecordManagerI("AdmTypeIndex", PIADM, "UPDATESTATIONS", 0))
+			..i RecordID '= ""  d
+			...s RecordDate = $lg(^User.DHCPEAdmRecordManagerD(RecordID), 3)
+			...s:RecordDate'="" RecordDate=##class(websys.Conversions).DateLogicalToHtml(RecordDate)
+			...s RecordTime = $lg(^User.DHCPEAdmRecordManagerD(RecordID), 5)
+			...s:RecordTime'="" RecordTime=##class(websys.Conversions).TimeLogicalToHtml(RecordTime)
+			...s RecordDateTime = RecordDate_" "_RecordTime
+			...s RecordUserDR = $lg(^User.DHCPEAdmRecordManagerD(RecordID), 7)
+			...s:RecordUserDR'="" RecordUser=$p($g(^SSU("SSUSR",RecordUserDR)),"^",2)
+			...i RecordUser = LoginDocName  s RecordSort = "A" _ RecordUserDR
+			...e  s RecordSort = "Z" _ RecordUserDR
+			..i GSStatus = "已主检"  s RecordDateTime = ""
+			..s TCancelLockUser = "", CancelSort = ""
+			..i $d(^DHCPEDataEx("DHCPEGeneralSummarize", "CancelLock", PaadmID))  d
+			...s sort = +$o(^DHCPEDataEx("DHCPEGeneralSummarize", "CancelLock", PaadmID, ""), -1)
+			...s CancelLockInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "CancelLock", PaadmID, sort))
+			...s CancelUserDR = $p(CancelLockInfo, "^", 1)
+			...s:CancelUserDR'="" TCancelLockUser=$p(^SSU("SSUSR",CancelUserDR),"^",2)
+			...;s:LockUser="" CancelSort="Z99"
+			...s CancelSort = "Z99"
+			..q:(HaveLock = "CancelLock")&&((TCancelLockUser = "")||(LockFlag = 1))
+			..;;;排序规则：急要标识-》本人获取结果队列-》本人锁定队列-》A医生获取结果队列-》A医生锁定队列-》到达队列-》撤销锁定队列
+			..i (MainDoctor = "Y")||(MainDoctor = "Z")  s RecordSort = $zdh(AdmDate, 3)
+			..s Sort = JYSort _ "$" _ RecordSort _ "$" _ LockSort _ "$" _ CancelSort
+			..;  粘贴核对界面排序：急要最优先，再先个人(先 Vip 后健康, 均日期由远至近）；后团队(先 Vip 后健康, 均日期由远至近
+			..s:OnlyRead="Y" Sort=JYSort_"$"_IGSort_"$"_VIPSort
+			..b:PaadmID=80017828
+			..//高危等级
+			..s HighRiskLevel = "无"
+			..i $d(^User.DHCPEHighRiskResultI("PAAdmIndex", PaadmID)) = 0  d
+			... s HighRiskLevel = "无"
+			..e  d
+			...&sql(select max(HRR_Level) into :HighRiskLevel from sqluser.DHC_PE_HighRiskResult where HRR_PAAdm=:PaadmID)
+			... s HighRiskLevel = $p($g(^DHCPEEDC(HighRiskLevel)), "^", 2)
+			..q:(IsZJ = "1")&&(HighRiskLevel = "无")
+			..q:(IsZJ = "0")&&(HighRiskLevel '= "无")
+			..s AllRejectFlag = ..AllItemReject(IADM)
+			..q:(AllRejectFlag = "Y") //到达之后删除或弃检了所有项目的记录 20250702 qiaoyue
+			..s LastInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "LastDoctor", PaadmID))
+			..i LastInfo '= ""  d
+			...s lastDate = $p(LastInfo, "^", 2)
+			...s lastTime = $p(LastInfo, "^", 3)
+			...i GenStatus = "HadLast"  s Sort = lastDate _ "$" _ lastTime
+			..s AIFlag = "N"
+			..s RPTID = $o(^DHCPERPT(0, "IADM", IADM, ""))
+			..i RPTID '= ""  d
+			...s RPTAISendInfo = $p($g(^DHCPERPT(RPTID)), "^", 20)
+			...i RPTAISendInfo '= ""  s AIFlag = "Y"
+			..Set CheckedFlag = ##class(web.DHCPE.ResultDiagnosis).GetDHCPEStatusFlag("SendAudit", PaadmID)
+			..Set lastSendDetail = ##class(web.DHCPE.ResultDiagnosisNew).GetLastSendDetail(PaadmID)
+			..s ^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort, AdmDate, PaadmID) = PaadmID _ "^" _ PAPMINo _ "^" _ AdmDate _ "^" _ Name _ "^" _ Age _ "^" _ Sex _ "^" _ VIPLevel _ "^" _ VIPDesc _ "^" _ GName _ "^" _ GSStatus _ "^" _ ReMark _ "^" _ CAAuditFlag _ "^" _ CAMainFlag _ "^" _ PostPonedFlag _ "^" _ THPNo _ "^" _ GWFlag _ "^" _ LockUserDesc _ "^" _ RecordDateTime _ "^" _ TAuditDateTime _ "^" _ TCancelLockUser _ "^" _ PostPonedInfo _ "^" _ JYFlag _ "^" _ AIFlag _ "^" _ CheckedFlag _ "^" _ lastSendDetail
+			s Sort = ""
+			for  s Sort = $o(^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort)) q:Sort=""  d
+			.s SortAdmDate = ""
+			.f  s SortAdmDate = $o(^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort, SortAdmDate)) q:SortAdmDate=""  d
+			..s PaadmID = ""
+			..f  s PaadmID = $o(^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort, SortAdmDate, PaadmID)) q:PaadmID=""  d
+			...s SortInfo = $g(^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort, SortAdmDate, PaadmID))
+			...s ^CacheTemp(repid, ind) = $lb($p(SortInfo, "^", 1), $p(SortInfo, "^", 2), $p(SortInfo, "^", 3), $p(SortInfo, "^", 4), $p(SortInfo, "^", 5), $p(SortInfo, "^", 6), $p(SortInfo, "^", 7), $p(SortInfo, "^", 8), $p(SortInfo, "^", 9), $p(SortInfo, "^", 10), $p(SortInfo, "^", 11), $p(SortInfo, "^", 12), $p(SortInfo, "^", 13), $p(SortInfo, "^", 14), $p(SortInfo, "^", 15), $p(SortInfo, "^", 16), $p(SortInfo, "^", 17), $p(SortInfo, "^", 18), $p(SortInfo, "^", 19), $p(SortInfo, "^", 20), $p(SortInfo, "^", 21), $p(SortInfo, "^", 22), $p(SortInfo, "^", 23), $p(SortInfo, "^", 24), $p(SortInfo, "^", 25))
+			...s ind = ind + 1
+			s qHandle = $lb(0, repid, 0)
+			q $$$OK
+		} elseif (AuditDate '= "")
+		{
+			s AuditDate = ##class(websys.Conversions).DateHtmlToLogical(AuditDate)
+			if MainDoctor = "N"
+			{
+				s time = ""
+				for  s time = $o(^DHCPEGS(0, "AuditDateTime", AuditDate, time))  q:time=""  d
+				.s GSID = ""
+				.f  s GSID = $o(^DHCPEGS(0, "AuditDateTime", AuditDate, time, GSID))  q:GSID=""  d
+				..s AuditUser = $p($g(^DHCPEGS(GSID, 1)), "^", 5)
+				..q:(SuperFlag '= "1")&&(AuditUser '= CurUserID)  //过滤非本人审核的记录
+				..s IADM = $p($g(^DHCPEGS(GSID, 1)), "^", 1)
+				..s PIADM = $p($g(^DHCPEIADM(IADM)), "^", 4)
+				..s Status = $p($g(^DHCPEIADM(IADM)), "^", 8)
+				..q:Status'="ARRIVED"
+				..s LocFlag = ##class(web.DHCPE.PreCommon).GetLocFlag("PreADM", PIADM)
+				..q:LocFlag="1"
+				..s PGADMDR = $p($g(^DHCPEPreIADM(PIADM)), "^", 2)
+				..s IGSort = 1
+				..s:PGADMDR'="" IGSort=2
+				..q:(+Group '= "0")&&(Group '= PGADMDR)
+				..q:((Group = "ALLG")&&(PGADMDR = ""))
+				..q:((Group = "ALLI")&&(PGADMDR '= ""))
+				..S GName = ""
+				..i ""'=PGADMDR  d
+				...s GBIDR = $p($g(^DHCPEPreGADM(PGADMDR)), "^", 1)
+				...i ""'=GBIDR s GName = $p($g(^DHCPEPreGBI(GBIDR)), "^", 2)
+				..s PBID = $p($g(^DHCPEPreIADM(PIADM)), "^", 1)
+				..s THPNo = $p($g(^DHCPEPreIADM(PIADM)), "^", 27)
+				..b:THPNo="0100005090"
+				..q:THPNo="0100003000"
+				..s VIPLevel = +##class(web.DHCPE.PreCommon).GetVIPLevel("Pre", PIADM)
+				..q:(VIP '= "")&&(VIP '= VIPLevel)
+				..q:(VIPLevel = "9")&&(OnlyRead = "Y")  //单项体检
+				..;q:(VIPLevel = "9")&&(CSPName = "dhcpe.diagnosis.audit.csp") //总检界面不显示单项体检记录
+				..s:(VIPLevel = "9")&&(CSPName = "dhcpe.diagnosis.audit.csp") GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"不可主检")
+				..s PAPMINo = $p($g(^DHCPEPreIBI(PBID)), "^", 1)
+				..s Name = $p($g(^DHCPEPreIBI(PBID)), "^", 2)
+				..q:(PatName '= "")&&(Name'[PatName)
+				..s PaadmID = ##class(web.DHCPE.DHCPEIAdm).GetPAADMByPADM(PIADM)
+				..q:(SuperFlag '= "1")&&((LocID = 293)||(LocID = 292))&&(MainDoctor = "N")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","AR",CurUserID,PaadmID)))  //主检分配 目前只有温江/本部启用主检分配 20250926 by yl
+				..q:(SuperFlag '= "1")&&((LocID = 293)||(LocID = 292))&&(MainDoctor = "Y")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","MAR",CurUserID,PaadmID)))  //初审分配 目前只有温江/本部启用初审分配 20250926 by yl
+				..q:(SuperFlag '= "1")&&((LocID = 292)||(LocID = 15)||(LocID = 293))&&(MainDoctor = "Z")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","ZAR",CurUserID,PaadmID)))    //终审分配目前只本部不启用
+				..q:(CurUserID = "21573")&&(MainDoctor = "Z")&&($d(^User.DHCPEWorkDistributionI("TypePAADMIndex","ZAR",PaadmID)))  //分配了终审的吴琴琴不显示
+				.. //体检特殊客户类型
+				..s SpecialTypeCode = ##class(web.DHCPE.SpecialType).GetSpecialType(PAPMINo)
+				..i SpecialTypeCode '= ""  s Name = Name _ "(" _ SpecialTypeCode _ ")"
+				..s GSStatus = 1, AuditUser = "", Status = ""
+				..s (TAuditDate, TAuditTime, TAuditDateTime) = ""
+				..s GSID = ##class(web.DHCPE.ResultDiagnosis).GetSSId(PaadmID)
+				..i GSID '= ""  d
+				...s AuditUser = $p($g(^DHCPEGS(GSID, 1)), "^", 5)
+				...s Status = $p($g(^DHCPEGS(GSID, 1)), "^", 9)
+				...i AuditUser '= ""  d
+				....s TAuditDate = $p($g(^DHCPEGS(GSID, 1)), "^", 6)
+				....s:TAuditDate'="" TAuditDate=##class(websys.Conversions).DateLogicalToHtml(TAuditDate)
+				....s TAuditTime = $p($g(^DHCPEGS(GSID, 1)), "^", 7)
+				....s:TAuditTime'="" TAuditTime=##class(websys.Conversions).TimeLogicalToHtml(TAuditTime)
+				....s TAuditDateTime = TAuditDate_" "_TAuditTime
+				..s MainInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "MainDoctor", PaadmID))
+				..s MainUser = $p(MainInfo, "^", 1)
+				..s LastInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "LastDoctor", PaadmID))
+				..s LastUser = $p(LastInfo, "^", 1)
+				..q:(MDocName '= "")&&(MDocName '= MainUser)
+				..q:(OnlyRead = "Y")&&(AuditUser '= "")  //粘贴核对过滤已主检
+				..q:(GenStatus = "HadMain")&&(MainDoctor = "Z")&&((MainUser = "")||(LastUser '= "")) //终审界面查询已初审的
+				..s SendAuditStatus = ##class(web.DHCPE.ResultDiagnosis).IsCanSendAuditByPAADM(PaadmID)  //可核对 不可核对 已核对
+				..q:(MainDoctor '= "")&&(SendAuditStatus '= 2)&(HospID '= "2") //三级审核 都必须核对通过
+				..q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "CanCheck")&&(SendAuditStatus '= 0)
+				..q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "CanntCheck")&&(SendAuditStatus '= 1)
+				..q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "HadChecked")&&(SendAuditStatus '= 2)
+				..s ExistFlag = ##class(web.DHCPE.ResultDiagnosis).IsExistSendAuditByPAADM(PaadmID)  //存在核对未通过1  不存在为0
+				..q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "CanCheck")&&(ExistFlag = 1)  //可核对过滤核对未通过
+				..q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "NoSendAudit")&&(ExistFlag '= 1)
+				..i ((SendAuditStatus = 2))  s GSStatus = 0  //未粘贴核对不允许主检
+				..q:(GSStatus = "1")&&(GenStatus'["CanNoGS")&&(GenStatus '= "")&&(OnlyRead '= "Y") //过滤不可初审
+				..i GSStatus = "1"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "不可主检")
+				..i GSStatus = "0"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "可主检")
+				..s CAAuditFlag = 0, CAMainFlag = 0
+				..i AuditUser '= ""  d
+				...s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "已主检")
+				...i ##class(web.DHCPE.CA.Main).GetSignName(2, PaadmID) '= ""  s CAAuditFlag = 1
+				..i Status = "1"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "退回主检")
+				..i MainUser '= ""  d
+				...s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "已初审")
+				...i ##class(web.DHCPE.CA.Main).GetSignName(3, PaadmID) '= ""  s CAMainFlag = 1
+				..i Status = "2"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "退回初审")
+				..s:LastUser'="" GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已终审")
+				..i OnlyRead = "Y"  d
+				...s:SendAuditStatus=0 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"可核对")
+				...s:SendAuditStatus=1 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"不可核对")
+				...s:SendAuditStatus=2 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已核对")
+				...s:ExistFlag=1 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"核对不通过")
+				..q:(MainDoctor = "Y")&&(GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"未主检"))
+				..;i (MainDoctor = "Y")&&(GSStatus = "已初审")  s GSStatus = "未复审"
+				..;q:(GenStatus = "NoGS")&&(GSStatus '= ##class(websys.Translation).Get("dhcpenewdiagnosis.hisui.csp","未初审",langId))
+				..q:(GenStatus = "CanGS")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"可主检"))
+				..q:(GenStatus = "CanNoGS")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"不可主检"))
+				..q:(GenStatus = "HadGS")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已主检"))
+				..q:(GenStatus = "HadMain")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已初审"))
+				..q:(GenStatus = "HadLast")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已终审"))
+				..q:(GenStatus = "HadMainBack")&&(Status '= "1")
+				..q:(GenStatus = "HadLastBack")&&(Status '= "2")
+				..q:(SuperFlag '= "1")&&(OnlyRead = "Y")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","CC",CurUserID,PaadmID)))&&(GSStatus '= "核对不通过")
+				..q:(SuperFlag '= "1")&&(OnlyRead = "Y")&&(GenStatus = "SelfNoSendAudit")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","CC",CurUserID,PaadmID)))   ////只看自己核对未通过记录
+				..q:(GenStatus = "SelfNoSendAudit")&&(ExistFlag '= 1)
+				..//b ;GSStatus
+				..s PaPatID = $p($g(^PAADM(PaadmID)), "^", 1)
+				..s Sex = $p($g(^PAPER(PaPatID, "ALL")), "^", 7)
+				..s:Sex'="" Sex=$P($g(^CT("SEX",Sex)),"^",2)
+				..//s Age = ##class(web.DHCBillInterface).GetPapmiAge(PaPatID, "")
+				..s Age = ##class(web.DHCPE.DHCPECommon).GetPapmiAge(PaPatID, HospID)
+				..s (VIPLevel, VIPDesc) = ""
+				..s AdmDate = $p($g(^PAADM(PaadmID)), "^", 6)
+				..s AdmDate = ##class(websys.Conversions).DateLogicalToHtml(AdmDate)
+				..s VIPStr = ##class(web.DHCPE.PreCommon).GetVIPLevel("PAADM", PaadmID)
+				..i VIPStr '= ""  d
+				...s VIPLevel = $p(VIPStr, "^", 1)
+				...s VIPDesc = $p(VIPStr, "^", 2)
+				..q:(VIPLevel = "9")&&(OnlyRead = "Y")  //单项体检
+				..s ReMark = ""
+				..i $d(^User.DHCPEHighRiskResultI("PAAdmIndex", PaadmID))  s ReMark = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "有高危")
+				..s PostPonedFlag = ##class(web.DHCPE.OrderPostPoned).GetHadDelayItems(PaadmID)
+				..s PostPonedInfo = PostPonedFlag
+				..i PostPonedFlag = ""  s PostPonedFlag = "N"
+				..e  s PostPonedFlag = "Y"
+				..s GWFlag = ""
+				..i $d(^User.DHCPEHighRiskResultI("PAAdmIndex", PaadmID))  s GWFlag = "1"
+				../***翻译 start***/
+				..s Sex = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc("User.CTSex", Sex, "CTSEXDesc", "cls")
+				..s VIPDesc = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc("User.DHCPEVIPLevel", VIPDesc, "VLDesc", "cls")
+				..s VIPSort = 2
+				..s:(VIPDesc["VIP")||(VIPDesc["贵宾")||(VIPDesc["干部") VIPSort=1
+				../***翻译 end***/
+				..s JYSort = "9999999"
+				..s JYFlag = ##class(web.DHCPE.ResultDiagnosis).GetGSJYFlag(PaadmID)
+				..i JYFlag = 1  s JYSort = 1
+				..s LockFlag = 0
+				..s LockUserDesc = ""
+				..s LockUser = ""
+				..i $d(^DHCPEDataEx("DHCPEGeneralSummarize", "LockAudit", PaadmID))  d
+				...s LockFlag = 1
+				...s LockUser = $p(^DHCPEDataEx("DHCPEGeneralSummarize", "LockAudit", PaadmID), "^", 1)
+				...s LockUserDesc = $p($g(^SSU("SSUSR", LockUser)), "^", 2)
+				..s LockSort = "9999999"
+				..i LockFlag = "1"  s LockSort = "3"
+				..i CurUserID = LockUser s LockSort = "2"
+				..q:(HaveLock = "HaveLock")&&(LockFlag = 0)
+				..q:(DocName '= "")&&(LockUser '= DocName)
+				..;;第一次获取结果时间
+				..s RecordDate = "", RecordTime = "", RecordDateTime = "", RecordUser = "", RecordSort = "Z"
+				..s RecordID = $o(^User.DHCPEAdmRecordManagerI("AdmTypeIndex", PIADM, "UPDATESTATIONS", 0))
+				..i RecordID '= ""  d
+				...s RecordDate = $lg(^User.DHCPEAdmRecordManagerD(RecordID), 3)
+				...s:RecordDate'="" RecordDate=##class(websys.Conversions).DateLogicalToHtml(RecordDate)
+				...s RecordTime = $lg(^User.DHCPEAdmRecordManagerD(RecordID), 5)
+				...s:RecordTime'="" RecordTime=##class(websys.Conversions).TimeLogicalToHtml(RecordTime)
+				...s RecordDateTime = RecordDate_" "_RecordTime
+				...s RecordUserDR = $lg(^User.DHCPEAdmRecordManagerD(RecordID), 7)
+				...s:RecordUserDR'="" RecordUser=$p($g(^SSU("SSUSR",RecordUserDR)),"^",2)
+				...i RecordUser = LoginDocName  s RecordSort = "A" _ RecordUserDR
+				...e  s RecordSort = "Z" _ RecordUserDR
+				..i GSStatus = "已主检"  s RecordDateTime = ""
+				..s TCancelLockUser = "", CancelSort = ""
+				..i $d(^DHCPEDataEx("DHCPEGeneralSummarize", "CancelLock", PaadmID))  d
+				...s sort = +$o(^DHCPEDataEx("DHCPEGeneralSummarize", "CancelLock", PaadmID, ""), -1)
+				...s CancelLockInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "CancelLock", PaadmID, sort))
+				...s CancelUserDR = $p(CancelLockInfo, "^", 1)
+				...s:CancelUserDR'="" TCancelLockUser=$p(^SSU("SSUSR",CancelUserDR),"^",2)
+				...;s:LockUser="" CancelSort="Z99"
+				...s CancelSort = "Z99"
+				..q:(HaveLock = "CancelLock")&&((TCancelLockUser = "")||(LockFlag = 1))
+				..;;;排序规则：急要标识-》本人获取结果队列-》本人锁定队列-》A医生获取结果队列-》A医生锁定队列-》到达队列-》撤销锁定队列
+				..i (MainDoctor = "Y")||(MainDoctor = "Z")  s RecordSort = $zdh(AdmDate, 3)
+				..s Sort = JYSort _ "$" _ RecordSort _ "$" _ LockSort _ "$" _ CancelSort
+				..;  粘贴核对界面排序：急要最优先，再先个人(先 Vip 后健康, 均日期由远至近）；后团队(先 Vip 后健康, 均日期由远至近
+				..s:OnlyRead="Y" Sort=JYSort_"$"_IGSort_"$"_VIPSort
+				..b:PaadmID=80017828
+				..//高危等级
+				..s HighRiskLevel = "无"
+				..i $d(^User.DHCPEHighRiskResultI("PAAdmIndex", PaadmID)) = 0  d
+				... s HighRiskLevel = "无"
+				..e  d
+				...&sql(select max(HRR_Level) into :HighRiskLevel from sqluser.DHC_PE_HighRiskResult where HRR_PAAdm=:PaadmID)
+				... s HighRiskLevel = $p($g(^DHCPEEDC(HighRiskLevel)), "^", 2)
+				..q:(IsZJ = "1")&&(HighRiskLevel = "无")
+				..q:(IsZJ = "0")&&(HighRiskLevel '= "无")
+				..s AllRejectFlag = ..AllItemReject(IADM)
+				..q:(AllRejectFlag = "Y") //到达之后删除或弃检了所有项目的记录 20250702 qiaoyue
+				..s LastInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "LastDoctor", PaadmID))
+				..i LastInfo '= ""  d
+				...s lastDate = $p(LastInfo, "^", 2)
+				...s lastTime = $p(LastInfo, "^", 3)
+				...i GenStatus = "HadLast"  s Sort = lastDate _ "$" _ lastTime
+				..s AIFlag = "N"
+				..s RPTID = $o(^DHCPERPT(0, "IADM", IADM, ""))
+				..i RPTID '= ""  d
+				...s RPTAISendInfo = $p($g(^DHCPERPT(RPTID)), "^", 20)
+				...i RPTAISendInfo '= ""  s AIFlag = "Y"
+				..Set CheckedFlag = ##class(web.DHCPE.ResultDiagnosis).GetDHCPEStatusFlag("SendAudit", PaadmID)
+				..Set lastSendDetail = ##class(web.DHCPE.ResultDiagnosisNew).GetLastSendDetail(PaadmID)
+				..s ^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort, AdmDate, PaadmID) = PaadmID _ "^" _ PAPMINo _ "^" _ AdmDate _ "^" _ Name _ "^" _ Age _ "^" _ Sex _ "^" _ VIPLevel _ "^" _ VIPDesc _ "^" _ GName _ "^" _ GSStatus _ "^" _ ReMark _ "^" _ CAAuditFlag _ "^" _ CAMainFlag _ "^" _ PostPonedFlag _ "^" _ THPNo _ "^" _ GWFlag _ "^" _ LockUserDesc _ "^" _ RecordDateTime _ "^" _ TAuditDateTime _ "^" _ TCancelLockUser _ "^" _ PostPonedInfo _ "^" _ JYFlag _ "^" _ AIFlag _ "^" _ CheckedFlag _ "^" _ lastSendDetail
+				s Sort = ""
+				for  s Sort = $o(^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort)) q:Sort=""  d
+				.s SortAdmDate = ""
+				.f  s SortAdmDate = $o(^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort, SortAdmDate)) q:SortAdmDate=""  d
+				..s PaadmID = ""
+				..f  s PaadmID = $o(^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort, SortAdmDate, PaadmID)) q:PaadmID=""  d
+				...s SortInfo = $g(^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort, SortAdmDate, PaadmID))
+				...s ^CacheTemp(repid, ind) = $lb($p(SortInfo, "^", 1), $p(SortInfo, "^", 2), $p(SortInfo, "^", 3), $p(SortInfo, "^", 4), $p(SortInfo, "^", 5), $p(SortInfo, "^", 6), $p(SortInfo, "^", 7), $p(SortInfo, "^", 8), $p(SortInfo, "^", 9), $p(SortInfo, "^", 10), $p(SortInfo, "^", 11), $p(SortInfo, "^", 12), $p(SortInfo, "^", 13), $p(SortInfo, "^", 14), $p(SortInfo, "^", 15), $p(SortInfo, "^", 16), $p(SortInfo, "^", 17), $p(SortInfo, "^", 18), $p(SortInfo, "^", 19), $p(SortInfo, "^", 20), $p(SortInfo, "^", 21), $p(SortInfo, "^", 22), $p(SortInfo, "^", 23), $p(SortInfo, "^", 24), $p(SortInfo, "^", 25))
+				...s ind = ind + 1
+				s qHandle = $lb(0, repid, 0)
+				q $$$OK
+			} elseif (MainDoctor = "Y") {
+				s time = ""
+				for  s time = $o(^DHCPEDataEx("DHCPEGeneralSummarize", "MainDate", AuditDate, time))  q:time=""  d
+				.s PAADM = ""
+				.f  s PAADM = $o(^DHCPEDataEx("DHCPEGeneralSummarize", "MainDate", AuditDate, time, PAADM))  q:PAADM=""  d
+				..s IADM = ##class(web.DHCPE.DHCPECommon).GetIADMByPaadm(PAADM)
+				..s MainUser = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "MainDate", AuditDate, time, PAADM))
+				..q:(SuperFlag '= "1")&&(MainUser '= CurUserID)  //过滤非本人审核的记录
+				..s PIADM = $p($g(^DHCPEIADM(IADM)), "^", 4)
+				..s Status = $p($g(^DHCPEIADM(IADM)), "^", 8)
+				..q:Status'="ARRIVED"
+				..s LocFlag = ##class(web.DHCPE.PreCommon).GetLocFlag("PreADM", PIADM)
+				..q:LocFlag="1"
+				..s PGADMDR = $p($g(^DHCPEPreIADM(PIADM)), "^", 2)
+				..s IGSort = 1
+				..s:PGADMDR'="" IGSort=2
+				..q:(+Group '= "0")&&(Group '= PGADMDR)
+				..q:((Group = "ALLG")&&(PGADMDR = ""))
+				..q:((Group = "ALLI")&&(PGADMDR '= ""))
+				..S GName = ""
+				..i ""'=PGADMDR  d
+				...s GBIDR = $p($g(^DHCPEPreGADM(PGADMDR)), "^", 1)
+				...i ""'=GBIDR s GName = $p($g(^DHCPEPreGBI(GBIDR)), "^", 2)
+				..s PBID = $p($g(^DHCPEPreIADM(PIADM)), "^", 1)
+				..s THPNo = $p($g(^DHCPEPreIADM(PIADM)), "^", 27)
+				..b:THPNo="0100005090"
+				..q:THPNo="0100003000"
+				..s VIPLevel = +##class(web.DHCPE.PreCommon).GetVIPLevel("Pre", PIADM)
+				..q:(VIP '= "")&&(VIP '= VIPLevel)
+				..q:(VIPLevel = "9")&&(OnlyRead = "Y")  //单项体检
+				..;q:(VIPLevel = "9")&&(CSPName = "dhcpe.diagnosis.audit.csp") //总检界面不显示单项体检记录
+				..s:(VIPLevel = "9")&&(CSPName = "dhcpe.diagnosis.audit.csp") GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"不可主检")
+				..s PAPMINo = $p($g(^DHCPEPreIBI(PBID)), "^", 1)
+				..s Name = $p($g(^DHCPEPreIBI(PBID)), "^", 2)
+				..q:(PatName '= "")&&(Name'[PatName)
+				..s PaadmID = ##class(web.DHCPE.DHCPEIAdm).GetPAADMByPADM(PIADM)
+				..q:(SuperFlag '= "1")&&((LocID = 293)||(LocID = 292))&&(MainDoctor = "N")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","AR",CurUserID,PaadmID)))  //主检分配 目前只有温江/本部启用主检分配 20250926 by yl
+				..q:(SuperFlag '= "1")&&((LocID = 293)||(LocID = 292))&&(MainDoctor = "Y")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","MAR",CurUserID,PaadmID)))  //初审分配 目前只有温江/本部启用初审分配 20250926 by yl
+				..q:(SuperFlag '= "1")&&((LocID = 292)||(LocID = 15)||(LocID = 293))&&(MainDoctor = "Z")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","ZAR",CurUserID,PaadmID)))    //终审分配目前只本部不启用
+				..q:(CurUserID = "21573")&&(MainDoctor = "Z")&&($d(^User.DHCPEWorkDistributionI("TypePAADMIndex","ZAR",PaadmID)))  //分配了终审的吴琴琴不显示
+				.. //体检特殊客户类型
+				..s SpecialTypeCode = ##class(web.DHCPE.SpecialType).GetSpecialType(PAPMINo)
+				..i SpecialTypeCode '= ""  s Name = Name _ "(" _ SpecialTypeCode _ ")"
+				..s GSStatus = 1, AuditUser = "", Status = ""
+				..s (TAuditDate, TAuditTime, TAuditDateTime) = ""
+				..s GSID = ##class(web.DHCPE.ResultDiagnosis).GetSSId(PaadmID)
+				..i GSID '= ""  d
+				...s AuditUser = $p($g(^DHCPEGS(GSID, 1)), "^", 5)
+				...s Status = $p($g(^DHCPEGS(GSID, 1)), "^", 9)
+				...i AuditUser '= ""  d
+				....s TAuditDate = $p($g(^DHCPEGS(GSID, 1)), "^", 6)
+				....s:TAuditDate'="" TAuditDate=##class(websys.Conversions).DateLogicalToHtml(TAuditDate)
+				....s TAuditTime = $p($g(^DHCPEGS(GSID, 1)), "^", 7)
+				....s:TAuditTime'="" TAuditTime=##class(websys.Conversions).TimeLogicalToHtml(TAuditTime)
+				....s TAuditDateTime = TAuditDate_" "_TAuditTime
+				..s MainInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "MainDoctor", PaadmID))
+				..s MainUser = $p(MainInfo, "^", 1)
+				..s LastInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "LastDoctor", PaadmID))
+				..s LastUser = $p(LastInfo, "^", 1)
+				..q:(MDocName '= "")&&(MDocName '= MainUser)
+				..q:(OnlyRead = "Y")&&(AuditUser '= "")  //粘贴核对过滤已主检
+				..q:(GenStatus = "HadMain")&&(MainDoctor = "Z")&&((MainUser = "")||(LastUser '= "")) //终审界面查询已初审的
+				..s SendAuditStatus = ##class(web.DHCPE.ResultDiagnosis).IsCanSendAuditByPAADM(PaadmID)  //可核对 不可核对 已核对
+				..q:(MainDoctor '= "")&&(SendAuditStatus '= 2) //三级审核 都必须核对通过
+				..q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "CanCheck")&&(SendAuditStatus '= 0)
+				..q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "CanntCheck")&&(SendAuditStatus '= 1)
+				..q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "HadChecked")&&(SendAuditStatus '= 2)
+				..s ExistFlag = ##class(web.DHCPE.ResultDiagnosis).IsExistSendAuditByPAADM(PaadmID)  //存在核对未通过1  不存在为0
+				..q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "CanCheck")&&(ExistFlag = 1)  //可核对过滤核对未通过
+				..q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "NoSendAudit")&&(ExistFlag '= 1)
+				..i ((SendAuditStatus = 2))  s GSStatus = 0  //未粘贴核对不允许主检
+				..q:(GSStatus = "1")&&(GenStatus'["CanNoGS")&&(GenStatus '= "")&&(OnlyRead '= "Y") //过滤不可初审
+				..i GSStatus = "1"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "不可主检")
+				..i GSStatus = "0"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "可主检")
+				..s CAAuditFlag = 0, CAMainFlag = 0
+				..i AuditUser '= ""  d
+				...s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "已主检")
+				...i ##class(web.DHCPE.CA.Main).GetSignName(2, PaadmID) '= ""  s CAAuditFlag = 1
+				..i Status = "1"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "退回主检")
+				..i MainUser '= ""  d
+				...s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "已初审")
+				...i ##class(web.DHCPE.CA.Main).GetSignName(3, PaadmID) '= ""  s CAMainFlag = 1
+				..i Status = "2"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "退回初审")
+				..s:LastUser'="" GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已终审")
+				..i OnlyRead = "Y"  d
+				...s:SendAuditStatus=0 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"可核对")
+				...s:SendAuditStatus=1 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"不可核对")
+				...s:SendAuditStatus=2 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已核对")
+				...s:ExistFlag=1 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"核对不通过")
+				..q:(MainDoctor = "Y")&&(GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"未主检"))
+				..;i (MainDoctor = "Y")&&(GSStatus = "已初审")  s GSStatus = "未复审"
+				..;q:(GenStatus = "NoGS")&&(GSStatus '= ##class(websys.Translation).Get("dhcpenewdiagnosis.hisui.csp","未初审",langId))
+				..q:(GenStatus = "CanGS")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"可主检"))
+				..q:(GenStatus = "CanNoGS")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"不可主检"))
+				..q:(GenStatus = "HadGS")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已主检"))
+				..q:(GenStatus = "HadMain")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已初审"))
+				..q:(GenStatus = "HadLast")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已终审"))
+				..q:(GenStatus = "HadMainBack")&&(Status '= "1")
+				..q:(GenStatus = "HadLastBack")&&(Status '= "2")
+				..q:(SuperFlag '= "1")&&(OnlyRead = "Y")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","CC",CurUserID,PaadmID)))&&(GSStatus '= "核对不通过")
+				..q:(SuperFlag '= "1")&&(OnlyRead = "Y")&&(GenStatus = "SelfNoSendAudit")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","CC",CurUserID,PaadmID)))   ////只看自己核对未通过记录
+				..q:(GenStatus = "SelfNoSendAudit")&&(ExistFlag '= 1)
+				..//b ;GSStatus
+				..s PaPatID = $p($g(^PAADM(PaadmID)), "^", 1)
+				..s Sex = $p($g(^PAPER(PaPatID, "ALL")), "^", 7)
+				..s:Sex'="" Sex=$P($g(^CT("SEX",Sex)),"^",2)
+				..//s Age = ##class(web.DHCBillInterface).GetPapmiAge(PaPatID, "")
+				..s Age = ##class(web.DHCPE.DHCPECommon).GetPapmiAge(PaPatID, HospID)
+				..s (VIPLevel, VIPDesc) = ""
+				..s AdmDate = $p($g(^PAADM(PaadmID)), "^", 6)
+				..s AdmDate = ##class(websys.Conversions).DateLogicalToHtml(AdmDate)
+				..s VIPStr = ##class(web.DHCPE.PreCommon).GetVIPLevel("PAADM", PaadmID)
+				..i VIPStr '= ""  d
+				...s VIPLevel = $p(VIPStr, "^", 1)
+				...s VIPDesc = $p(VIPStr, "^", 2)
+				..q:(VIPLevel = "9")&&(OnlyRead = "Y")  //单项体检
+				..s ReMark = ""
+				..i $d(^User.DHCPEHighRiskResultI("PAAdmIndex", PaadmID))  s ReMark = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "有高危")
+				..s PostPonedFlag = ##class(web.DHCPE.OrderPostPoned).GetHadDelayItems(PaadmID)
+				..s PostPonedInfo = PostPonedFlag
+				..i PostPonedFlag = ""  s PostPonedFlag = "N"
+				..e  s PostPonedFlag = "Y"
+				..s GWFlag = ""
+				..i $d(^User.DHCPEHighRiskResultI("PAAdmIndex", PaadmID))  s GWFlag = "1"
+				../***翻译 start***/
+				..s Sex = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc("User.CTSex", Sex, "CTSEXDesc", "cls")
+				..s VIPDesc = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc("User.DHCPEVIPLevel", VIPDesc, "VLDesc", "cls")
+				..s VIPSort = 2
+				..s:(VIPDesc["VIP")||(VIPDesc["贵宾")||(VIPDesc["干部") VIPSort=1
+				../***翻译 end***/
+				..s JYSort = "9999999"
+				..s JYFlag = ##class(web.DHCPE.ResultDiagnosis).GetGSJYFlag(PaadmID)
+				..i JYFlag = 1  s JYSort = 1
+				..s LockFlag = 0
+				..s LockUserDesc = ""
+				..s LockUser = ""
+				..i $d(^DHCPEDataEx("DHCPEGeneralSummarize", "LockAudit", PaadmID))  d
+				...s LockFlag = 1
+				...s LockUser = $p(^DHCPEDataEx("DHCPEGeneralSummarize", "LockAudit", PaadmID), "^", 1)
+				...s LockUserDesc = $p($g(^SSU("SSUSR", LockUser)), "^", 2)
+				..s LockSort = "9999999"
+				..i LockFlag = "1"  s LockSort = "3"
+				..i CurUserID = LockUser s LockSort = "2"
+				..q:(HaveLock = "HaveLock")&&(LockFlag = 0)
+				..q:(DocName '= "")&&(LockUser '= DocName)
+				..;;第一次获取结果时间
+				..s RecordDate = "", RecordTime = "", RecordDateTime = "", RecordUser = "", RecordSort = "Z"
+				..s RecordID = $o(^User.DHCPEAdmRecordManagerI("AdmTypeIndex", PIADM, "UPDATESTATIONS", 0))
+				..i RecordID '= ""  d
+				...s RecordDate = $lg(^User.DHCPEAdmRecordManagerD(RecordID), 3)
+				...s:RecordDate'="" RecordDate=##class(websys.Conversions).DateLogicalToHtml(RecordDate)
+				...s RecordTime = $lg(^User.DHCPEAdmRecordManagerD(RecordID), 5)
+				...s:RecordTime'="" RecordTime=##class(websys.Conversions).TimeLogicalToHtml(RecordTime)
+				...s RecordDateTime = RecordDate_" "_RecordTime
+				...s RecordUserDR = $lg(^User.DHCPEAdmRecordManagerD(RecordID), 7)
+				...s:RecordUserDR'="" RecordUser=$p($g(^SSU("SSUSR",RecordUserDR)),"^",2)
+				...i RecordUser = LoginDocName  s RecordSort = "A" _ RecordUserDR
+				...e  s RecordSort = "Z" _ RecordUserDR
+				..i GSStatus = "已主检"  s RecordDateTime = ""
+				..s TCancelLockUser = "", CancelSort = ""
+				..i $d(^DHCPEDataEx("DHCPEGeneralSummarize", "CancelLock", PaadmID))  d
+				...s sort = +$o(^DHCPEDataEx("DHCPEGeneralSummarize", "CancelLock", PaadmID, ""), -1)
+				...s CancelLockInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "CancelLock", PaadmID, sort))
+				...s CancelUserDR = $p(CancelLockInfo, "^", 1)
+				...s:CancelUserDR'="" TCancelLockUser=$p(^SSU("SSUSR",CancelUserDR),"^",2)
+				...;s:LockUser="" CancelSort="Z99"
+				...s CancelSort = "Z99"
+				..q:(HaveLock = "CancelLock")&&((TCancelLockUser = "")||(LockFlag = 1))
+				..;;;排序规则：急要标识-》本人获取结果队列-》本人锁定队列-》A医生获取结果队列-》A医生锁定队列-》到达队列-》撤销锁定队列
+				..i (MainDoctor = "Y")||(MainDoctor = "Z")  s RecordSort = $zdh(AdmDate, 3)
+				..s Sort = JYSort _ "$" _ RecordSort _ "$" _ LockSort _ "$" _ CancelSort
+				..;  粘贴核对界面排序：急要最优先，再先个人(先 Vip 后健康, 均日期由远至近）；后团队(先 Vip 后健康, 均日期由远至近
+				..s:OnlyRead="Y" Sort=JYSort_"$"_IGSort_"$"_VIPSort
+				..b:PaadmID=80017828
+				..//高危等级
+				..s HighRiskLevel = "无"
+				..i $d(^User.DHCPEHighRiskResultI("PAAdmIndex", PaadmID)) = 0  d
+				... s HighRiskLevel = "无"
+				..e  d
+				...&sql(select max(HRR_Level) into :HighRiskLevel from sqluser.DHC_PE_HighRiskResult where HRR_PAAdm=:PaadmID)
+				... s HighRiskLevel = $p($g(^DHCPEEDC(HighRiskLevel)), "^", 2)
+				..q:(IsZJ = "1")&&(HighRiskLevel = "无")
+				..q:(IsZJ = "0")&&(HighRiskLevel '= "无")
+				..s AllRejectFlag = ..AllItemReject(IADM)
+				..q:(AllRejectFlag = "Y") //到达之后删除或弃检了所有项目的记录 20250702 qiaoyue
+				..s LastInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "LastDoctor", PaadmID))
+				..i LastInfo '= ""  d
+				...s lastDate = $p(LastInfo, "^", 2)
+				...s lastTime = $p(LastInfo, "^", 3)
+				...i GenStatus = "HadLast"  s Sort = lastDate _ "$" _ lastTime
+				..s AIFlag = "N"
+				..s RPTID = $o(^DHCPERPT(0, "IADM", IADM, ""))
+				..i RPTID '= ""  d
+				...s RPTAISendInfo = $p($g(^DHCPERPT(RPTID)), "^", 20)
+				...i RPTAISendInfo '= ""  s AIFlag = "Y"
+				..Set CheckedFlag = ##class(web.DHCPE.ResultDiagnosis).GetDHCPEStatusFlag("SendAudit", PaadmID)
+				..Set lastSendDetail = ##class(web.DHCPE.ResultDiagnosisNew).GetLastSendDetail(PaadmID)
+				..s ^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort, AdmDate, PaadmID) = PaadmID _ "^" _ PAPMINo _ "^" _ AdmDate _ "^" _ Name _ "^" _ Age _ "^" _ Sex _ "^" _ VIPLevel _ "^" _ VIPDesc _ "^" _ GName _ "^" _ GSStatus _ "^" _ ReMark _ "^" _ CAAuditFlag _ "^" _ CAMainFlag _ "^" _ PostPonedFlag _ "^" _ THPNo _ "^" _ GWFlag _ "^" _ LockUserDesc _ "^" _ RecordDateTime _ "^" _ TAuditDateTime _ "^" _ TCancelLockUser _ "^" _ PostPonedInfo _ "^" _ JYFlag _ "^" _ AIFlag _ "^" _ CheckedFlag _ "^" _ lastSendDetail
+				s Sort = ""
+				for  s Sort = $o(^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort)) q:Sort=""  d
+				.s SortAdmDate = ""
+				.f  s SortAdmDate = $o(^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort, SortAdmDate)) q:SortAdmDate=""  d
+				..s PaadmID = ""
+				..f  s PaadmID = $o(^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort, SortAdmDate, PaadmID)) q:PaadmID=""  d
+				...s SortInfo = $g(^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort, SortAdmDate, PaadmID))
+				...s ^CacheTemp(repid, ind) = $lb($p(SortInfo, "^", 1), $p(SortInfo, "^", 2), $p(SortInfo, "^", 3), $p(SortInfo, "^", 4), $p(SortInfo, "^", 5), $p(SortInfo, "^", 6), $p(SortInfo, "^", 7), $p(SortInfo, "^", 8), $p(SortInfo, "^", 9), $p(SortInfo, "^", 10), $p(SortInfo, "^", 11), $p(SortInfo, "^", 12), $p(SortInfo, "^", 13), $p(SortInfo, "^", 14), $p(SortInfo, "^", 15), $p(SortInfo, "^", 16), $p(SortInfo, "^", 17), $p(SortInfo, "^", 18), $p(SortInfo, "^", 19), $p(SortInfo, "^", 20), $p(SortInfo, "^", 21), $p(SortInfo, "^", 22), $p(SortInfo, "^", 23), $p(SortInfo, "^", 24), $p(SortInfo, "^", 25))
+				...s ind = ind + 1
+				s qHandle = $lb(0, repid, 0)
+				q $$$OK
+			} elseif (MainDoctor = "Z") {
+				s time = ""
+				for  s time = $o(^DHCPEDataEx("DHCPEGeneralSummarize", "LastDate", AuditDate, time))  q:time=""  d
+				.s PAADM = ""
+				.f  s PAADM = $o(^DHCPEDataEx("DHCPEGeneralSummarize", "LastDate", AuditDate, time, PAADM))  q:PAADM=""  d
+				..s IADM = ##class(web.DHCPE.DHCPECommon).GetIADMByPaadm(PAADM)
+				..s LastUser = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "LastDate", AuditDate, time, PAADM))
+				..q:(SuperFlag '= "1")&&(LastUser '= CurUserID)  //过滤非本人审核的记录
+				..s PIADM = $p($g(^DHCPEIADM(IADM)), "^", 4)
+				..s Status = $p($g(^DHCPEIADM(IADM)), "^", 8)
+				..q:Status'="ARRIVED"
+				..s LocFlag = ##class(web.DHCPE.PreCommon).GetLocFlag("PreADM", PIADM)
+				..q:LocFlag="1"
+				..s PGADMDR = $p($g(^DHCPEPreIADM(PIADM)), "^", 2)
+				..s IGSort = 1
+				..s:PGADMDR'="" IGSort=2
+				..q:(+Group '= "0")&&(Group '= PGADMDR)
+				..q:((Group = "ALLG")&&(PGADMDR = ""))
+				..q:((Group = "ALLI")&&(PGADMDR '= ""))
+				..S GName = ""
+				..i ""'=PGADMDR  d
+				...s GBIDR = $p($g(^DHCPEPreGADM(PGADMDR)), "^", 1)
+				...i ""'=GBIDR s GName = $p($g(^DHCPEPreGBI(GBIDR)), "^", 2)
+				..s PBID = $p($g(^DHCPEPreIADM(PIADM)), "^", 1)
+				..s THPNo = $p($g(^DHCPEPreIADM(PIADM)), "^", 27)
+				..b:THPNo="0100005090"
+				..q:(THPNo = "0100003000")||(THPNo = "0300016870")||(THPNo = "0300036410")||(THPNo = "0300036919")||(THPNo = "0300042669")||(THPNo = "0300042646")
+				..s VIPLevel = +##class(web.DHCPE.PreCommon).GetVIPLevel("Pre", PIADM)
+				..q:(VIP '= "")&&(VIP '= VIPLevel)
+				..q:(VIPLevel = "9")&&(OnlyRead = "Y")  //单项体检
+				..;q:(VIPLevel = "9")&&(CSPName = "dhcpe.diagnosis.audit.csp") //总检界面不显示单项体检记录
+				..s:(VIPLevel = "9")&&(CSPName = "dhcpe.diagnosis.audit.csp") GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"不可主检")
+				..s PAPMINo = $p($g(^DHCPEPreIBI(PBID)), "^", 1)
+				..s Name = $p($g(^DHCPEPreIBI(PBID)), "^", 2)
+				..q:(PatName '= "")&&(Name'[PatName)
+				..s PaadmID = ##class(web.DHCPE.DHCPEIAdm).GetPAADMByPADM(PIADM)
+				..q:(SuperFlag '= "1")&&((LocID = 293)||(LocID = 292))&&(MainDoctor = "N")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","AR",CurUserID,PaadmID)))  //主检分配 目前只有温江/本部启用主检分配 20250926 by yl
+				..q:(SuperFlag '= "1")&&((LocID = 293)||(LocID = 292))&&(MainDoctor = "Y")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","MAR",CurUserID,PaadmID)))  //初审分配 目前只有温江/本部启用初审分配 20250926 by yl
+				..q:(SuperFlag '= "1")&&((LocID = 292)||(LocID = 15)||(LocID = 293))&&(MainDoctor = "Z")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","ZAR",CurUserID,PaadmID)))    //终审分配目前只本部不启用
+				..q:(CurUserID = "21573")&&(MainDoctor = "Z")&&($d(^User.DHCPEWorkDistributionI("TypePAADMIndex","ZAR",PaadmID)))  //分配了终审的吴琴琴不显示
+				.. //体检特殊客户类型
+				..s SpecialTypeCode = ##class(web.DHCPE.SpecialType).GetSpecialType(PAPMINo)
+				..i SpecialTypeCode '= ""  s Name = Name _ "(" _ SpecialTypeCode _ ")"
+				..s GSStatus = 1, AuditUser = "", Status = ""
+				..s (TAuditDate, TAuditTime, TAuditDateTime) = ""
+				..s GSID = ##class(web.DHCPE.ResultDiagnosis).GetSSId(PaadmID)
+				..i GSID '= ""  d
+				...s AuditUser = $p($g(^DHCPEGS(GSID, 1)), "^", 5)
+				...s Status = $p($g(^DHCPEGS(GSID, 1)), "^", 9)
+				...i AuditUser '= ""  d
+				....s TAuditDate = $p($g(^DHCPEGS(GSID, 1)), "^", 6)
+				....s:TAuditDate'="" TAuditDate=##class(websys.Conversions).DateLogicalToHtml(TAuditDate)
+				....s TAuditTime = $p($g(^DHCPEGS(GSID, 1)), "^", 7)
+				....s:TAuditTime'="" TAuditTime=##class(websys.Conversions).TimeLogicalToHtml(TAuditTime)
+				....s TAuditDateTime = TAuditDate_" "_TAuditTime
+				..s MainInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "MainDoctor", PaadmID))
+				..s MainUser = $p(MainInfo, "^", 1)
+				..s LastInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "LastDoctor", PaadmID))
+				..s LastUser = $p(LastInfo, "^", 1)
+				..q:(MDocName '= "")&&(MDocName '= MainUser)
+				..q:(OnlyRead = "Y")&&(AuditUser '= "")  //粘贴核对过滤已主检
+				..q:(GenStatus = "HadMain")&&(MainDoctor = "Z")&&((MainUser = "")||(LastUser '= "")) //终审界面查询已初审的
+				..s SendAuditStatus = ##class(web.DHCPE.ResultDiagnosis).IsCanSendAuditByPAADM(PaadmID)  //可核对 不可核对 已核对
+				..q:(MainDoctor '= "")&&(SendAuditStatus '= 2) //三级审核 都必须核对通过
+				..q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "CanCheck")&&(SendAuditStatus '= 0)
+				..q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "CanntCheck")&&(SendAuditStatus '= 1)
+				..q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "HadChecked")&&(SendAuditStatus '= 2)
+				..s ExistFlag = ##class(web.DHCPE.ResultDiagnosis).IsExistSendAuditByPAADM(PaadmID)  //存在核对未通过1  不存在为0
+				..q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "CanCheck")&&(ExistFlag = 1)  //可核对过滤核对未通过
+				..q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "NoSendAudit")&&(ExistFlag '= 1)
+				..i ((SendAuditStatus = 2))  s GSStatus = 0  //未粘贴核对不允许主检
+				..q:(GSStatus = "1")&&(GenStatus'["CanNoGS")&&(GenStatus '= "")&&(OnlyRead '= "Y") //过滤不可初审
+				..i GSStatus = "1"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "不可主检")
+				..i GSStatus = "0"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "可主检")
+				..s CAAuditFlag = 0, CAMainFlag = 0
+				..i AuditUser '= ""  d
+				...s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "已主检")
+				...i ##class(web.DHCPE.CA.Main).GetSignName(2, PaadmID) '= ""  s CAAuditFlag = 1
+				..i Status = "1"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "退回主检")
+				..i MainUser '= ""  d
+				...s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "已初审")
+				...i ##class(web.DHCPE.CA.Main).GetSignName(3, PaadmID) '= ""  s CAMainFlag = 1
+				..i Status = "2"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "退回初审")
+				..s:LastUser'="" GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已终审")
+				..i OnlyRead = "Y"  d
+				...s:SendAuditStatus=0 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"可核对")
+				...s:SendAuditStatus=1 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"不可核对")
+				...s:SendAuditStatus=2 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已核对")
+				...s:ExistFlag=1 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"核对不通过")
+				..q:(MainDoctor = "Y")&&(GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"未主检"))
+				..;i (MainDoctor = "Y")&&(GSStatus = "已初审")  s GSStatus = "未复审"
+				..;q:(GenStatus = "NoGS")&&(GSStatus '= ##class(websys.Translation).Get("dhcpenewdiagnosis.hisui.csp","未初审",langId))
+				..q:(GenStatus = "CanGS")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"可主检"))
+				..q:(GenStatus = "CanNoGS")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"不可主检"))
+				..q:(GenStatus = "HadGS")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已主检"))
+				..q:(GenStatus = "HadMain")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已初审"))
+				..q:(GenStatus = "HadLast")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已终审"))
+				..q:(GenStatus = "HadMainBack")&&(Status '= "1")
+				..q:(GenStatus = "HadLastBack")&&(Status '= "2")
+				..q:(SuperFlag '= "1")&&(OnlyRead = "Y")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","CC",CurUserID,PaadmID)))&&(GSStatus '= "核对不通过")
+				..q:(SuperFlag '= "1")&&(OnlyRead = "Y")&&(GenStatus = "SelfNoSendAudit")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","CC",CurUserID,PaadmID)))   ////只看自己核对未通过记录
+				..q:(GenStatus = "SelfNoSendAudit")&&(ExistFlag '= 1)
+				..//b ;GSStatus
+				..s PaPatID = $p($g(^PAADM(PaadmID)), "^", 1)
+				..s Sex = $p($g(^PAPER(PaPatID, "ALL")), "^", 7)
+				..s:Sex'="" Sex=$P($g(^CT("SEX",Sex)),"^",2)
+				..//s Age = ##class(web.DHCBillInterface).GetPapmiAge(PaPatID, "")
+				..s Age = ##class(web.DHCPE.DHCPECommon).GetPapmiAge(PaPatID, HospID)
+				..s (VIPLevel, VIPDesc) = ""
+				..s AdmDate = $p($g(^PAADM(PaadmID)), "^", 6)
+				..s AdmDate = ##class(websys.Conversions).DateLogicalToHtml(AdmDate)
+				..s VIPStr = ##class(web.DHCPE.PreCommon).GetVIPLevel("PAADM", PaadmID)
+				..i VIPStr '= ""  d
+				...s VIPLevel = $p(VIPStr, "^", 1)
+				...s VIPDesc = $p(VIPStr, "^", 2)
+				..q:(VIPLevel = "9")&&(OnlyRead = "Y")  //单项体检
+				..s ReMark = ""
+				..i $d(^User.DHCPEHighRiskResultI("PAAdmIndex", PaadmID))  s ReMark = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "有高危")
+				..s PostPonedFlag = ##class(web.DHCPE.OrderPostPoned).GetHadDelayItems(PaadmID)
+				..s PostPonedInfo = PostPonedFlag
+				..i PostPonedFlag = ""  s PostPonedFlag = "N"
+				..e  s PostPonedFlag = "Y"
+				..s GWFlag = ""
+				..i $d(^User.DHCPEHighRiskResultI("PAAdmIndex", PaadmID))  s GWFlag = "1"
+				../***翻译 start***/
+				..s Sex = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc("User.CTSex", Sex, "CTSEXDesc", "cls")
+				..s VIPDesc = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc("User.DHCPEVIPLevel", VIPDesc, "VLDesc", "cls")
+				..s VIPSort = 2
+				..s:(VIPDesc["VIP")||(VIPDesc["贵宾")||(VIPDesc["干部") VIPSort=1
+				../***翻译 end***/
+				..s JYSort = "9999999"
+				..s JYFlag = ##class(web.DHCPE.ResultDiagnosis).GetGSJYFlag(PaadmID)
+				..i JYFlag = 1  s JYSort = 1
+				..s LockFlag = 0
+				..s LockUserDesc = ""
+				..s LockUser = ""
+				..i $d(^DHCPEDataEx("DHCPEGeneralSummarize", "LockAudit", PaadmID))  d
+				...s LockFlag = 1
+				...s LockUser = $p(^DHCPEDataEx("DHCPEGeneralSummarize", "LockAudit", PaadmID), "^", 1)
+				...s LockUserDesc = $p($g(^SSU("SSUSR", LockUser)), "^", 2)
+				..s LockSort = "9999999"
+				..i LockFlag = "1"  s LockSort = "3"
+				..i CurUserID = LockUser s LockSort = "2"
+				..q:(HaveLock = "HaveLock")&&(LockFlag = 0)
+				..q:(DocName '= "")&&(LockUser '= DocName)
+				..;;第一次获取结果时间
+				..s RecordDate = "", RecordTime = "", RecordDateTime = "", RecordUser = "", RecordSort = "Z"
+				..s RecordID = $o(^User.DHCPEAdmRecordManagerI("AdmTypeIndex", PIADM, "UPDATESTATIONS", 0))
+				..i RecordID '= ""  d
+				...s RecordDate = $lg(^User.DHCPEAdmRecordManagerD(RecordID), 3)
+				...s:RecordDate'="" RecordDate=##class(websys.Conversions).DateLogicalToHtml(RecordDate)
+				...s RecordTime = $lg(^User.DHCPEAdmRecordManagerD(RecordID), 5)
+				...s:RecordTime'="" RecordTime=##class(websys.Conversions).TimeLogicalToHtml(RecordTime)
+				...s RecordDateTime = RecordDate_" "_RecordTime
+				...s RecordUserDR = $lg(^User.DHCPEAdmRecordManagerD(RecordID), 7)
+				...s:RecordUserDR'="" RecordUser=$p($g(^SSU("SSUSR",RecordUserDR)),"^",2)
+				...i RecordUser = LoginDocName  s RecordSort = "A" _ RecordUserDR
+				...e  s RecordSort = "Z" _ RecordUserDR
+				..i GSStatus = "已主检"  s RecordDateTime = ""
+				..s TCancelLockUser = "", CancelSort = ""
+				..i $d(^DHCPEDataEx("DHCPEGeneralSummarize", "CancelLock", PaadmID))  d
+				...s sort = +$o(^DHCPEDataEx("DHCPEGeneralSummarize", "CancelLock", PaadmID, ""), -1)
+				...s CancelLockInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "CancelLock", PaadmID, sort))
+				...s CancelUserDR = $p(CancelLockInfo, "^", 1)
+				...s:CancelUserDR'="" TCancelLockUser=$p(^SSU("SSUSR",CancelUserDR),"^",2)
+				...;s:LockUser="" CancelSort="Z99"
+				...s CancelSort = "Z99"
+				..q:(HaveLock = "CancelLock")&&((TCancelLockUser = "")||(LockFlag = 1))
+				..;;;排序规则：急要标识-》本人获取结果队列-》本人锁定队列-》A医生获取结果队列-》A医生锁定队列-》到达队列-》撤销锁定队列
+				..i (MainDoctor = "Y")||(MainDoctor = "Z")  s RecordSort = $zdh(AdmDate, 3)
+				..s Sort = JYSort _ "$" _ RecordSort _ "$" _ LockSort _ "$" _ CancelSort
+				..;  粘贴核对界面排序：急要最优先，再先个人(先 Vip 后健康, 均日期由远至近）；后团队(先 Vip 后健康, 均日期由远至近
+				..s:OnlyRead="Y" Sort=JYSort_"$"_IGSort_"$"_VIPSort
+				..b:PaadmID=80017828
+				..//高危等级
+				..s HighRiskLevel = "无"
+				..i $d(^User.DHCPEHighRiskResultI("PAAdmIndex", PaadmID)) = 0  d
+				... s HighRiskLevel = "无"
+				..e  d
+				...&sql(select max(HRR_Level) into :HighRiskLevel from sqluser.DHC_PE_HighRiskResult where HRR_PAAdm=:PaadmID)
+				... s HighRiskLevel = $p($g(^DHCPEEDC(HighRiskLevel)), "^", 2)
+				..q:(IsZJ = "1")&&(HighRiskLevel = "无")
+				..q:(IsZJ = "0")&&(HighRiskLevel '= "无")
+				..s AllRejectFlag = ..AllItemReject(IADM)
+				..q:(AllRejectFlag = "Y") //到达之后删除或弃检了所有项目的记录 20250702 qiaoyue
+				..s LastInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "LastDoctor", PaadmID))
+				..i LastInfo '= ""  d
+				...s lastDate = $p(LastInfo, "^", 2)
+				...s lastTime = $p(LastInfo, "^", 3)
+				...i GenStatus = "HadLast"  s Sort = lastDate _ "$" _ lastTime
+				..s AIFlag = "N"
+				..s RPTID = $o(^DHCPERPT(0, "IADM", IADM, ""))
+				..i RPTID '= ""  d
+				...s RPTAISendInfo = $p($g(^DHCPERPT(RPTID)), "^", 20)
+				...i RPTAISendInfo '= ""  s AIFlag = "Y"
+				..Set CheckedFlag = ##class(web.DHCPE.ResultDiagnosis).GetDHCPEStatusFlag("SendAudit", PaadmID)
+				..Set lastSendDetail = ##class(web.DHCPE.ResultDiagnosisNew).GetLastSendDetail(PaadmID)
+				..s ^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort, AdmDate, PaadmID) = PaadmID _ "^" _ PAPMINo _ "^" _ AdmDate _ "^" _ Name _ "^" _ Age _ "^" _ Sex _ "^" _ VIPLevel _ "^" _ VIPDesc _ "^" _ GName _ "^" _ GSStatus _ "^" _ ReMark _ "^" _ CAAuditFlag _ "^" _ CAMainFlag _ "^" _ PostPonedFlag _ "^" _ THPNo _ "^" _ GWFlag _ "^" _ LockUserDesc _ "^" _ RecordDateTime _ "^" _ TAuditDateTime _ "^" _ TCancelLockUser _ "^" _ PostPonedInfo _ "^" _ JYFlag _ "^" _ AIFlag _ "^" _ CheckedFlag _ "^" _ lastSendDetail
+				s Sort = ""
+				for  s Sort = $o(^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort)) q:Sort=""  d
+				.s SortAdmDate = ""
+				.f  s SortAdmDate = $o(^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort, SortAdmDate)) q:SortAdmDate=""  d
+				..s PaadmID = ""
+				..f  s PaadmID = $o(^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort, SortAdmDate, PaadmID)) q:PaadmID=""  d
+				...s SortInfo = $g(^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort, SortAdmDate, PaadmID))
+				...s ^CacheTemp(repid, ind) = $lb($p(SortInfo, "^", 1), $p(SortInfo, "^", 2), $p(SortInfo, "^", 3), $p(SortInfo, "^", 4), $p(SortInfo, "^", 5), $p(SortInfo, "^", 6), $p(SortInfo, "^", 7), $p(SortInfo, "^", 8), $p(SortInfo, "^", 9), $p(SortInfo, "^", 10), $p(SortInfo, "^", 11), $p(SortInfo, "^", 12), $p(SortInfo, "^", 13), $p(SortInfo, "^", 14), $p(SortInfo, "^", 15), $p(SortInfo, "^", 16), $p(SortInfo, "^", 17), $p(SortInfo, "^", 18), $p(SortInfo, "^", 19), $p(SortInfo, "^", 20), $p(SortInfo, "^", 21), $p(SortInfo, "^", 22), $p(SortInfo, "^", 23), $p(SortInfo, "^", 24), $p(SortInfo, "^", 25))
+				...s ind = ind + 1
+				s qHandle = $lb(0, repid, 0)
+				q $$$OK
+			}
+		} elseif (RegNo = "") {
+			if CurUserID = 21687  s logStime = $now()
+			if (OnlyRead = "Y")&&(BDate = "")  s BDate = +$h -30
+			if (BDate = "")  s BDate = +$h -15
+			if (EDate = "")  s EDate = +$h
+			if BDate '= ""  s BDate = ##class(websys.Conversions).DateHtmlToLogical(BDate)
+			if EDate '= ""  s EDate = ##class(websys.Conversions).DateHtmlToLogical(EDate)
+			s Date = BDate -1
+			if (OnlyRead = "Y")&&(PatName '= "")  s EDate = +$h
+			for  s Date = $o(^DHCPEIADM(0, "AdmDateTime", Date)) q:(Date = "")||(Date > EDate)  d
+			.s time = 0
+			.f  s time = $o(^DHCPEIADM(0, "AdmDateTime", Date, time)) q:(time = "")  d
+			..s IADM = 0
+			..f  s IADM = $o(^DHCPEIADM(0, "AdmDateTime", Date, time, IADM)) q:(IADM = "")  d
+			...s PIADM = $p($g(^DHCPEIADM(IADM)), "^", 4)
+			...s Status = $p($g(^DHCPEIADM(IADM)), "^", 8)
+			...q:Status'="ARRIVED"
+			...s LocFlag = ##class(web.DHCPE.PreCommon).GetLocFlag("PreADM", PIADM, LocID)
+			...q:LocFlag="1"
+			...s PGADMDR = $p($g(^DHCPEPreIADM(PIADM)), "^", 2)
+			...s IGSort = 1
+			...s:PGADMDR'="" IGSort=2
+			...q:(+Group '= "0")&&(Group '= PGADMDR)
+			...q:((Group = "ALLG")&&(PGADMDR = ""))
+			...q:((Group = "ALLI")&&(PGADMDR '= ""))
+			...S GName = ""
+			...i ""'=PGADMDR  d
+			....s GBIDR = $p($g(^DHCPEPreGADM(PGADMDR)), "^", 1)
+			....i ""'=GBIDR s GName = $p($g(^DHCPEPreGBI(GBIDR)), "^", 2)
+			...s PBID = $p($g(^DHCPEPreIADM(PIADM)), "^", 1)
+			...s THPNo = $p($g(^DHCPEPreIADM(PIADM)), "^", 27)
+			...b:THPNo="0100005090"
+			...q:(THPNo = "0100003000")||(THPNo = "0300016870")||(THPNo = "0300036410")||(THPNo = "0300036919")||(THPNo = "0300042669")||(THPNo = "0300042646")||(THPNo = "0300072500")
+			...s VIPLevel = +##class(web.DHCPE.PreCommon).GetVIPLevel("Pre", PIADM)
+			...q:(VIP '= "")&&(VIP '= VIPLevel)
+			...q:(VIPLevel = "9")&&(OnlyRead = "Y")  //单项体检
+			...;q:(VIPLevel = "9")&&(CSPName = "dhcpe.diagnosis.audit.csp") //总检界面不显示单项体检记录
+			...s:(VIPLevel = "9")&&(CSPName = "dhcpe.diagnosis.audit.csp") GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"不可主检")
+			...s PAPMINo = $p($g(^DHCPEPreIBI(PBID)), "^", 1)
+			...s Name = $p($g(^DHCPEPreIBI(PBID)), "^", 2)
+			...q:(PatName '= "")&&(Name'[PatName)
+			...s PaadmID = ##class(web.DHCPE.DHCPEIAdm).GetPAADMByPADM(PIADM)
+			...b:PIADM=86767
+			...q:(SuperFlag '= "1")&&((LocID = 293)||(LocID = 292))&&(MainDoctor = "N")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","AR",CurUserID,PaadmID)))  //主检分配 目前只有温江/本部启用主检分配 20250926 by yl
+			...q:(SuperFlag '= "1")&&((LocID = 293)||(LocID = 292))&&(MainDoctor = "Y")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","MAR",CurUserID,PaadmID)))  //初审分配 目前只有温江/本部启用初审分配 20250926 by yl
+			...q:(SuperFlag '= "1")&&((LocID = 292)||(LocID = 15)||(LocID = 293))&&(MainDoctor = "Z")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","ZAR",CurUserID,PaadmID)))    //终审分配目前只本部不启用
+			...q:(CurUserID = "21573")&&((LocID = 293))&&(MainDoctor = "Z")&&($d(^User.DHCPEWorkDistributionI("TypePAADMIndex","ZAR",PaadmID)))  //分配了终审的吴琴琴不显示
+			... //体检特殊客户类型
+			...s SpecialTypeCode = ##class(web.DHCPE.SpecialType).GetSpecialType(PAPMINo)
+			...i SpecialTypeCode '= ""  s Name = Name _ "(" _ SpecialTypeCode _ ")"
+			...s GSStatus = 1, AuditUser = "", Status = ""
+			...s (TAuditDate, TAuditTime, TAuditDateTime) = ""
+			...s GSID = ##class(web.DHCPE.ResultDiagnosis).GetSSId(PaadmID)
+			...i GSID '= ""  d
+			....s AuditUser = $p($g(^DHCPEGS(GSID, 1)), "^", 5)
+			....s Status = $p($g(^DHCPEGS(GSID, 1)), "^", 9)
+			....i AuditUser '= ""  d
+			.....s TAuditDate = $p($g(^DHCPEGS(GSID, 1)), "^", 6)
+			.....s:TAuditDate'="" TAuditDate=##class(websys.Conversions).DateLogicalToHtml(TAuditDate)
+			.....s TAuditTime = $p($g(^DHCPEGS(GSID, 1)), "^", 7)
+			.....s:TAuditTime'="" TAuditTime=##class(websys.Conversions).TimeLogicalToHtml(TAuditTime)
+			.....s TAuditDateTime = TAuditDate_" "_TAuditTime
+			...s MainInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "MainDoctor", PaadmID))
+			...s MainUser = $p(MainInfo, "^", 1)
+			...s LastInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "LastDoctor", PaadmID))
+			...s LastUser = $p(LastInfo, "^", 1)
+			...q:(MDocName '= "")&&(MDocName '= MainUser)
+			...q:(OnlyRead = "Y")&&(AuditUser '= "")  //粘贴核对过滤已主检
+			...q:(GenStatus = "HadMain")&&(MainDoctor = "Z")&&((MainUser = "")||(LastUser '= "")) //终审界面查询已初审的
+			...q:(GenStatus = "HadLast")&&(MainDoctor = "Z")&&(LastUser '= CurUserID)
+			...//i CurUserID = 21687  s SendAuditStatus = 2  //测试用
+			...s SendAuditStatus = ##class(web.DHCPE.ResultDiagnosis).IsCanSendAuditByPAADM(PaadmID)  //可核对 不可核对 已核对
+			...q:(MainDoctor '= "")&&(SendAuditStatus '= 2)&(HospID '= "2") //三级审核 都必须核对通过
+			...q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "CanCheck")&&(SendAuditStatus '= 0)
+			...q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "CanntCheck")&&(SendAuditStatus '= 1)
+			...q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "HadChecked")&&(SendAuditStatus '= 2)
+			...s ExistFlag = ##class(web.DHCPE.ResultDiagnosis).IsExistSendAuditByPAADM(PaadmID)  //存在核对未通过1  不存在为0
+			...q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "CanCheck")&&(ExistFlag = 1)  //可核对过滤核对未通过
+			...q:(OnlyRead = "Y")&&(GenStatus '= "")&&(GenStatus = "NoSendAudit")&&(ExistFlag '= 1)
+			...//s GSStatus = ##class(web.DHCPE.ResultDiagnosis).IsAllItemExcByPAADM(PaadmID)  //可初审  不可初审
+			...i ((SendAuditStatus = 2))  s GSStatus = 0  //未粘贴核对不允许主检
+			...q:(GSStatus = "1")&&(GenStatus'["CanNoGS")&&(GenStatus '= "")&&(OnlyRead '= "Y") //过滤不可初审
+			...i GSStatus = "1"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "不可主检")
+			...i GSStatus = "0"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "可主检")
+			...s CAAuditFlag = 0, CAMainFlag = 0
+			...i AuditUser '= ""  d
+			....s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "已主检")
+			....i ##class(web.DHCPE.CA.Main).GetSignName(2, PaadmID) '= ""  s CAAuditFlag = 1
+			...i Status = "1"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "退回主检")
+			...i MainUser '= ""  d
+			....s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "已初审")
+			....i ##class(web.DHCPE.CA.Main).GetSignName(3, PaadmID) '= ""  s CAMainFlag = 1
+			...i Status = "2"  s GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "退回初审")
+			...s:LastUser'="" GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已终审")
+			...i OnlyRead = "Y"  d
+			....s:SendAuditStatus=0 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"可核对")
+			....s:SendAuditStatus=1 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"不可核对")
+			....s:SendAuditStatus=2 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已核对")
+			....s:ExistFlag=1 GSStatus=##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"核对不通过")
+			...q:(MainDoctor = "Y")&&(GSStatus = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"未主检"))
+			...;i (MainDoctor = "Y")&&(GSStatus = "已初审")  s GSStatus = "未复审"
+			...;q:(GenStatus = "NoGS")&&(GSStatus '= ##class(websys.Translation).Get("dhcpenewdiagnosis.hisui.csp","未初审",langId))
+			...q:(GenStatus = "CanGS")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"可主检"))
+			...q:(GenStatus = "CanNoGS")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"不可主检"))
+			...q:(GenStatus = "HadGS")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已主检"))
+			...q:(GenStatus = "HadMain")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已初审"))
+			...q:(GenStatus = "HadLast")&&(GSStatus '= ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName,"已终审"))
+			...q:(GenStatus = "HadMainBack")&&(Status '= "1")
+			...q:(GenStatus = "HadLastBack")&&(Status '= "2")
+			...q:(SuperFlag '= "1")&&(OnlyRead = "Y")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","CC",CurUserID,PaadmID)))&&(GSStatus '= "核对不通过")
+			...q:(SuperFlag '= "1")&&(OnlyRead = "Y")&&(GenStatus = "SelfNoSendAudit")&&('$D(^User.DHCPEWorkDistributionI("TypeReceiverDRIndex","CC",CurUserID,PaadmID)))   ////只看自己核对未通过记录
+			...q:(GenStatus = "SelfNoSendAudit")&&(ExistFlag '= 1)
+			...//b ;GSStatus
+			...s PaPatID = $p($g(^PAADM(PaadmID)), "^", 1)
+			...s Sex = $p($g(^PAPER(PaPatID, "ALL")), "^", 7)
+			...s:Sex'="" Sex=$P($g(^CT("SEX",Sex)),"^",2)
+			...//s Age = ##class(web.DHCBillInterface).GetPapmiAge(PaPatID, "")
+			...s Age = ##class(web.DHCPE.DHCPECommon).GetPapmiAge(PaPatID, HospID)
+			...s (VIPLevel, VIPDesc) = ""
+			...s AdmDate = $p($g(^PAADM(PaadmID)), "^", 6)
+			...s AdmDate = ##class(websys.Conversions).DateLogicalToHtml(AdmDate)
+			...s VIPStr = ##class(web.DHCPE.PreCommon).GetVIPLevel("PAADM", PaadmID)
+			...i VIPStr '= ""  d
+			....s VIPLevel = $p(VIPStr, "^", 1)
+			....s VIPDesc = $p(VIPStr, "^", 2)
+			...q:(VIPLevel = "9")&&(OnlyRead = "Y")  //单项体检
+			...s ReMark = ""
+			...i $d(^User.DHCPEHighRiskResultI("PAAdmIndex", PaadmID))  s ReMark = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc(CSPName, "有高危")
+			...s PostPonedFlag = ##class(web.DHCPE.OrderPostPoned).GetHadDelayItems(PaadmID)
+			...s PostPonedInfo = PostPonedFlag
+			...i PostPonedFlag = ""  s PostPonedFlag = "N"
+			...e  s PostPonedFlag = "Y"
+			...s GWFlag = ""
+			...i $d(^User.DHCPEHighRiskResultI("PAAdmIndex", PaadmID))  s GWFlag = "1"
+			.../***翻译 start***/
+			...s Sex = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc("User.CTSex", Sex, "CTSEXDesc", "cls")
+			...s VIPDesc = ##class(web.DHCPE.CT.Public.PubFun).GetTranslationDesc("User.DHCPEVIPLevel", VIPDesc, "VLDesc", "cls")
+			...s VIPSort = 2
+			...s:(VIPDesc["VIP")||(VIPDesc["贵宾")||(VIPDesc["干部") VIPSort=1
+			.../***翻译 end***/
+			...s JYSort = "9999999"
+			...s JYFlag = ##class(web.DHCPE.ResultDiagnosis).GetGSJYFlag(PaadmID)
+			...i JYFlag = 1  s JYSort = 1
+			...s LockFlag = 0
+			...s LockUserDesc = ""
+			...s LockUser = ""
+			...i $d(^DHCPEDataEx("DHCPEGeneralSummarize", "LockAudit", PaadmID))  d
+			....s LockFlag = 1
+			....s LockUser = $p(^DHCPEDataEx("DHCPEGeneralSummarize", "LockAudit", PaadmID), "^", 1)
+			....s LockUserDesc = $p($g(^SSU("SSUSR", LockUser)), "^", 2)
+			...s LockSort = "9999999"
+			...i LockFlag = "1"  s LockSort = "3"
+			...i CurUserID = LockUser s LockSort = "2"
+			...q:(HaveLock = "HaveLock")&&(LockFlag = 0)
+			...q:(DocName '= "")&&(LockUser '= DocName)
+			...;;第一次获取结果时间
+			...s RecordDate = "", RecordTime = "", RecordDateTime = "", RecordUser = "", RecordSort = "Z"
+			...s RecordID = $o(^User.DHCPEAdmRecordManagerI("AdmTypeIndex", PIADM, "UPDATESTATIONS", 0))
+			...i RecordID '= ""  d
+			....s RecordDate = $lg(^User.DHCPEAdmRecordManagerD(RecordID), 3)
+			....s:RecordDate'="" RecordDate=##class(websys.Conversions).DateLogicalToHtml(RecordDate)
+			....s RecordTime = $lg(^User.DHCPEAdmRecordManagerD(RecordID), 5)
+			....s:RecordTime'="" RecordTime=##class(websys.Conversions).TimeLogicalToHtml(RecordTime)
+			....s RecordDateTime = RecordDate_" "_RecordTime
+			....s RecordUserDR = $lg(^User.DHCPEAdmRecordManagerD(RecordID), 7)
+			....s:RecordUserDR'="" RecordUser=$p($g(^SSU("SSUSR",RecordUserDR)),"^",2)
+			....i RecordUser = LoginDocName  s RecordSort = "A" _ RecordUserDR
+			....e  s RecordSort = "Z" _ RecordUserDR
+			...i GSStatus = "已主检"  s RecordDateTime = ""
+			...s TCancelLockUser = "", CancelSort = ""
+			...i $d(^DHCPEDataEx("DHCPEGeneralSummarize", "CancelLock", PaadmID))  d
+			....s sort = +$o(^DHCPEDataEx("DHCPEGeneralSummarize", "CancelLock", PaadmID, ""), -1)
+			....s CancelLockInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "CancelLock", PaadmID, sort))
+			....s CancelUserDR = $p(CancelLockInfo, "^", 1)
+			....s:CancelUserDR'="" TCancelLockUser=$p(^SSU("SSUSR",CancelUserDR),"^",2)
+			....;s:LockUser="" CancelSort="Z99"
+			....s CancelSort = "Z99"
+			...q:(HaveLock = "CancelLock")&&((TCancelLockUser = "")||(LockFlag = 1))
+			...;;;排序规则：急要标识-》本人获取结果队列-》本人锁定队列-》A医生获取结果队列-》A医生锁定队列-》到达队列-》撤销锁定队列
+			...i (MainDoctor = "Y")||(MainDoctor = "Z")  s RecordSort = $zdh(AdmDate, 3)
+			...s Sort = JYSort _ "$" _ RecordSort _ "$" _ LockSort _ "$" _ CancelSort
+			...;  粘贴核对界面排序：急要最优先，再先个人(先 Vip 后健康, 均日期由远至近）；后团队(先 Vip 后健康, 均日期由远至近
+			...s:OnlyRead="Y" Sort=JYSort_"$"_IGSort_"$"_VIPSort
+			...b:PaadmID=80017828
+			...//高危等级
+			...s HighRiskLevel = "无"
+			...i $d(^User.DHCPEHighRiskResultI("PAAdmIndex", PaadmID)) = 0  d
+			.... s HighRiskLevel = "无"
+			...e  d
+			....&sql(select max(HRR_Level) into :HighRiskLevel from sqluser.DHC_PE_HighRiskResult where HRR_PAAdm=:PaadmID)
+			.... s HighRiskLevel = $p($g(^DHCPEEDC(HighRiskLevel)), "^", 2)
+			...q:(IsZJ = "1")&&(HighRiskLevel = "无")
+			...q:(IsZJ = "0")&&(HighRiskLevel '= "无")
+			...s AllRejectFlag = ..AllItemReject(IADM)
+			...q:(AllRejectFlag = "Y") //到达之后删除或弃检了所有项目的记录 20250702 qiaoyue
+			...s LastInfo = $g(^DHCPEDataEx("DHCPEGeneralSummarize", "LastDoctor", PaadmID))
+			...i LastInfo '= ""  d
+			....s lastDate = $p(LastInfo, "^", 2)
+			....s lastTime = $p(LastInfo, "^", 3)
+			....i GenStatus = "HadLast"  s Sort = lastDate _ "$" _ lastTime
+			...s AIFlag = "N"
+			...s RPTID = $o(^DHCPERPT(0, "IADM", IADM, ""))
+			...i RPTID '= ""  d
+			....s RPTAISendInfo = $p($g(^DHCPERPT(RPTID)), "^", 20)
+			....i RPTAISendInfo '= ""  s AIFlag = "Y"
+			...Set CheckedFlag = ##class(web.DHCPE.ResultDiagnosis).GetDHCPEStatusFlag("SendAudit", PaadmID)
+			...Set lastSendDetail = ##class(web.DHCPE.ResultDiagnosisNew).GetLastSendDetail(PaadmID)
+			...s ^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort, AdmDate, PaadmID) = PaadmID _ "^" _ PAPMINo _ "^" _ AdmDate _ "^" _ Name _ "^" _ Age _ "^" _ Sex _ "^" _ VIPLevel _ "^" _ VIPDesc _ "^" _ GName _ "^" _ GSStatus _ "^" _ ReMark _ "^" _ CAAuditFlag _ "^" _ CAMainFlag _ "^" _ PostPonedFlag _ "^" _ THPNo _ "^" _ GWFlag _ "^" _ LockUserDesc _ "^" _ RecordDateTime _ "^" _ TAuditDateTime _ "^" _ TCancelLockUser _ "^" _ PostPonedInfo _ "^" _ JYFlag _ "^" _ AIFlag _ "^" _ CheckedFlag _ "^" _ lastSendDetail
+			s Sort = ""
+			for  s Sort = $o(^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort)) q:Sort=""  d
+			.s SortAdmDate = ""
+			.f  s SortAdmDate = $o(^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort, SortAdmDate)) q:SortAdmDate=""  d
+			..s PaadmID = ""
+			..f  s PaadmID = $o(^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort, SortAdmDate, PaadmID)) q:PaadmID=""  d
+			...s SortInfo = $g(^TmpDHCPE("FindDiagnosisPatInfo", CurUserID, Sort, SortAdmDate, PaadmID))
+			...s ^CacheTemp(repid, ind) = $lb($p(SortInfo, "^", 1), $p(SortInfo, "^", 2), $p(SortInfo, "^", 3), $p(SortInfo, "^", 4), $p(SortInfo, "^", 5), $p(SortInfo, "^", 6), $p(SortInfo, "^", 7), $p(SortInfo, "^", 8), $p(SortInfo, "^", 9), $p(SortInfo, "^", 10), $p(SortInfo, "^", 11), $p(SortInfo, "^", 12), $p(SortInfo, "^", 13), $p(SortInfo, "^", 14), $p(SortInfo, "^", 15), $p(SortInfo, "^", 16), $p(SortInfo, "^", 17), $p(SortInfo, "^", 18), $p(SortInfo, "^", 19), $p(SortInfo, "^", 20), $p(SortInfo, "^", 21), $p(SortInfo, "^", 22), $p(SortInfo, "^", 23), $p(SortInfo, "^", 24), $p(SortInfo, "^", 25))
+			...s ind = ind + 1
+
+			//i CurUserID=21687 Set ^tmpwgy("LogTime") = $G(logStime)_"^"_ $Now()
+			s qHandle = $lb(0, repid, 0)
+			q $$$OK
 		}
 	}
-	d ..grantMenu(stMenuId, endMenuId, GroupDesc)
-	q 1
 }
 }

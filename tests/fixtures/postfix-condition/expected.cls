@@ -1,4 +1,4 @@
 ClassMethod Test()
 {
-	q:(inci = "")&&(arcim = "")
+	q:(inci = "") && (arcim = "")
 }

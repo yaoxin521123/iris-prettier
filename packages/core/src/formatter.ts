@@ -142,7 +142,7 @@ function formatLineContent(line: string, options: FormatOptions): string {
       formatOperatorSpacing
     );
     if (/^(if|elseif)\s*\(/i.test(r.trim())) {
-      r = r.replace(/\s*&&\s*/g, " && ").replace(/\s*\|\|\s*/g, " || ");
+      r = r.replace(/\s*&&\s*/g, "&&").replace(/\s*\|\|\s*/g, "||");
     }
     r = formatMultiCommandSpacingLine(r);
     return unmaskEmbeddedSqlSpans(r, spans);
@@ -198,6 +198,53 @@ function joinIfConditionContinuations(lines: string[]): string[] {
   return result;
 }
 
+/** 将 `}\nelseif\n{` 合并为 `} elseif {`（`else` / `catch` 同理） */
+function joinCloseElseBranchLines(lines: string[]): string[] {
+  const result: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i]!;
+    if (line.trim() !== "}") {
+      result.push(line);
+      i++;
+      continue;
+    }
+
+    let j = i + 1;
+    while (j < lines.length && isBlank(lines[j]!)) {
+      j++;
+    }
+    const branchRaw = lines[j];
+    if (!branchRaw || !/^(else|elseif|catch)\b/i.test(branchRaw.trim())) {
+      result.push(line);
+      i++;
+      continue;
+    }
+
+    let branch = branchRaw.trim();
+    let end = j;
+
+    if (!opensBlock(branch)) {
+      let m = j + 1;
+      while (m < lines.length && isBlank(lines[m]!)) {
+        m++;
+      }
+      if (lines[m]?.trim() !== "{") {
+        result.push(line);
+        i++;
+        continue;
+      }
+      branch = `${branch} {`;
+      end = m;
+    }
+
+    const lead = line.match(/^(\s*)/)?.[1] ?? "";
+    result.push(`${lead}} ${branch}`);
+    i = end + 1;
+  }
+  return result;
+}
+
 export function formatObjectScript(
   source: string,
   partial?: Partial<FormatOptions>
@@ -212,6 +259,7 @@ export function formatObjectScript(
     normalized = convertDotSyntaxToBlockCore(text);
   }
   let lines = joinIfConditionContinuations(normalized.split("\n"));
+  lines = joinCloseElseBranchLines(lines);
 
   // Allman braces: split `Method Foo() {` only when brace on same line
   for (let i = 0; i < lines.length; i++) {

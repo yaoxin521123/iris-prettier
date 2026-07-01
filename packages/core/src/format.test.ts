@@ -445,18 +445,36 @@ describe("operator spacing", () => {
   it("spaces comparison operators in if conditions", () => {
     expect(format("if DateFrom'=\"\"  s x = 1\n")).toContain("DateFrom '= \"\"");
     expect(format("if DateFrom'=\"\"  s x = 1\n")).not.toContain("DateFrom' =");
-    expect(format("if TimeFrom[\":\"  s x = 1\n")).toContain("TimeFrom '[");
-    expect(format('if (dispqty \'[".")  s dispqty = 1\n')).toContain("'[ \".");
+    expect(format("if TimeFrom[\":\"  s x = 1\n")).toContain('TimeFrom [ ":"');
+    expect(format('if (dispqty \'[".")  s dispqty = 1\n')).toContain('[ ".');
     expect(format("if AdmHosp>0  s x = 1\n")).toContain("AdmHosp > 0");
     expect(format("if x>=1  s y = 2\n")).toContain("x>= 1");
     expect(format(".i (Ingd<= 0)  s Ret = Ingd q\n")).toContain("(Ingd <= 0)");
+  });
+
+  it("removes spaces around && and || in if conditions", () => {
+    expect(
+      format('if (CurUserID = "21573") && (LocID = 293)  s x = 1\n')
+    ).toBe('if (CurUserID = "21573")&&(LocID = 293)  s x = 1\n');
+    expect(format('if (a = 1) || (b = 2)  s x = 1\n')).toBe(
+      'if (a = 1)||(b = 2)  s x = 1\n'
+    );
+  });
+
+  it("spaces contains operator [ without adding apostrophe", () => {
+    const src =
+      '...s:(VIPDesc["VIP")||(VIPDesc["贵宾")||(VIPDesc["干部") VIPSort=1';
+    const out = format(src);
+    expect(out).toBe(src);
+    expect(out).not.toContain("'[");
+    expect(out).not.toContain(" '[");
   });
 });
 
 describe("postfix conditions", () => {
   it("spaces operators inside parentheses only", () => {
     expect(formatPostfixCondition('q:(inci = "") && (arcim = "")')).toBe(
-      'q:(inci = "")&&(arcim = "")'
+      'q:(inci = "") && (arcim = "")'
     );
     expect(formatPostfixCondition("continue:(DateFrom>0)&&(repDate<DateFrom)")).toBe(
       "continue:(DateFrom > 0)&&(repDate < DateFrom)"
@@ -466,11 +484,11 @@ describe("postfix conditions", () => {
         'q:(prescForm\'="")&&(..CheckIfIncludeId(prescTypeStr,prescForm,",")="N")'
       )
     ).toBe(
-      'q:(prescForm \'= "")&&(..CheckIfIncludeId(prescTypeStr, prescForm, ",") = "N")'
+      'q:(prescForm \'= "")&&(..CheckIfIncludeId(prescTypeStr,prescForm,",") = "N")'
     );
   });
 
-  it("tightens operators in unparenthesized postfix conditions", () => {
+  it("preserves unparenthesized postfix conditions unchanged", () => {
     expect(formatPostfixCondition('q:EpisodeId="" rtn')).toBe('q:EpisodeId="" rtn');
     expect(formatPostfixCondition("q:EpisodeId'>0 flag")).toBe("q:EpisodeId'>0 flag");
     expect(formatPostfixCondition('s:usercode\'="" userid=$o(^X)')).toBe(
@@ -478,9 +496,19 @@ describe("postfix conditions", () => {
     );
     expect(
       formatPostfixCondition('s:security = "" security=$zbitstr(50000, 0)')
-    ).toBe('s:security="" security=$zbitstr(50000, 0)');
-    expect(formatPostfixCondition("q:seq = \"\"")).toBe('q:seq=""');
-    expect(formatPostfixCondition("q:cateId = \"\"")).toBe('q:cateId=""');
+    ).toBe('s:security = "" security=$zbitstr(50000, 0)');
+    expect(formatPostfixCondition("q:seq = \"\"")).toBe('q:seq = ""');
+    expect(formatPostfixCondition("q:cateId = \"\"")).toBe('q:cateId = ""');
+    expect(
+      format(
+        "..d:ArriveFlag=0 ##class(web.DHCPE.DHCPEIAdm).IAdmArrived(PreIADM)\n"
+      ).trimEnd()
+    ).toBe(
+      "..d:ArriveFlag=0 ##class(web.DHCPE.DHCPEIAdm).IAdmArrived(PreIADM)"
+    );
+    expect(formatPostfixCondition("d:(ArriveFlag = 0) ##class(Foo).Bar()")).toBe(
+      "d:(ArriveFlag = 0) ##class(Foo).Bar()"
+    );
     const line = 'q:phl="" -1_"^"_"不是药房"';
     expect(formatPostfixLine(line)).toBe(line);
     expect(format(line + "\n").trimEnd()).toBe(line);
@@ -519,11 +547,9 @@ describe("postfix conditions", () => {
   });
 
   it("formats nested parentheses and keeps tail text", () => {
-    expect(
-      formatPostfixLine(
-        '..s:(flag MissTip = "(" _ $s(MaxMissionWind> = 20:"++++", 1:"-") _ ")")'
-      )
-    ).toMatch(/MaxMissionWind>=\s*20/);
+    const line =
+      '..s:(flag MissTip = "(" _ $s(MaxMissionWind> = 20:"++++", 1:"-") _ ")")';
+    expect(formatPostfixLine(line)).toBe(line);
     expect(
       formatPostfixLine(
         '..s:(^DHCDocConfig("AllergyCureItem", "EditCombo")[ItmMastdr MissionWind = MissionWind1)'
@@ -554,18 +580,18 @@ describe("postfix conditions", () => {
     const line =
       'q:$d(^ABN.DHCNurSkinTestRecSubI("OrdRowId"," "_OeordItemID)) -100\t;已保存过的';
     const once = formatPostfixCondition(line)!;
-    expect(once).toContain('"OrdRowId", " "_OeordItemID');
+    expect(once).toBe(line);
     expect(once).not.toMatch(/^q:\(\$d/);
     expect(formatPostfixCondition(once)).toBe(once);
   });
 
-  it("spaces commas inside unparenthesized q:$d(...) postfix", () => {
+  it("preserves unparenthesized q:$d(...) postfix unchanged", () => {
     const line = 'q:$d(^DHCINTR(0,"TypePointer",trType,Pointer))';
     const once = formatPostfixCondition(line)!;
-    expect(once).toBe('q:$d(^DHCINTR(0, "TypePointer", trType, Pointer))');
+    expect(once).toBe(line);
     expect(formatPostfixCondition(once)).toBe(once);
     expect(format(".q:$d(^DHCINTR(0,\"TypePointer\",trType,Pointer))\n").trim()).toBe(
-      '.q:$d(^DHCINTR(0, "TypePointer", trType, Pointer))'
+      '.q:$d(^DHCINTR(0,"TypePointer",trType,Pointer))'
     );
   });
 });
@@ -1071,9 +1097,74 @@ describe("if condition layout", () => {
 }`;
     const out = format(src);
     expect(out).toMatch(
-      /if \(OrderInsertTime > DosingEndTime\) && \(\(\(OrderInsertDate = ExcuteDate\)\)/
+      /if \(OrderInsertTime > DosingEndTime\)&&\(\(\(OrderInsertDate = ExcuteDate\)\)/
     );
     expect(out).not.toMatch(/DosingEndTime\) &&\n/);
+  });
+});
+
+describe("close else branch merging", () => {
+  it("merges split } elseif { onto one line", () => {
+    const src = `ClassMethod T()
+{
+\tif (A = 1)
+\t{
+\t\ts x = 1
+\t}
+\t\telseif(MainDoctor="Z")
+\t\t{
+\t\t\ts y = 2
+\t\t}
+}`;
+    const out = format(src);
+    expect(out).toContain("} elseif (MainDoctor = \"Z\") {");
+    expect(out).not.toMatch(/\}\s*\n\s*elseif\b/i);
+    expect(out).toMatch(/\} elseif.*\{[\s\S]*s y = 2/);
+  });
+
+  it("merges split } else { onto one line", () => {
+    const src = `ClassMethod T()
+{
+\tif (A = 1)
+\t{
+\t\ts x = 1
+\t}
+\telse
+\t{
+\t\ts y = 2
+\t}
+}`;
+    const out = format(src);
+    expect(out).toContain("} else {");
+    expect(out).not.toMatch(/\}\s*\n\s*else\b/i);
+  });
+
+  it("merges when elseif line already ends with {", () => {
+    const src = `ClassMethod T()
+{
+\tif (A = 1) {
+\t\ts x = 1
+\t}
+\telseif (B = 2) {
+\t\ts y = 2
+\t}
+}`;
+    const out = format(src);
+    expect(out).toContain("} elseif (B = 2) {");
+    expect(out).not.toMatch(/\}\s*\n\s*elseif\b/i);
+  });
+
+  it("does not merge when branch is not followed by {", () => {
+    const src = `ClassMethod T()
+{
+\tif (A = 1) {
+\t\ts x = 1
+\t}
+\telseif (B = 2)
+\t\ts y = 2
+}`;
+    const out = format(src);
+    expect(out).toMatch(/\}\s*\n\telseif \(B = 2\)/);
   });
 });
 
@@ -1255,6 +1346,21 @@ describe("try-catch blocks", () => {
 \tq ""
 }`;
     expect(format(src)).toBe(expected);
+  });
+
+  it("merges split } catch { onto one line", () => {
+    const src = `ClassMethod M()
+{
+\ttry {
+\t\ts x = 1
+\t}
+\tcatch (e) {
+\t\ts y = e.AsStatus()
+\t}
+}`;
+    const out = format(src);
+    expect(out).toContain("} catch (e) {");
+    expect(out).not.toMatch(/\}\s*\n\s*catch\b/i);
   });
 });
 

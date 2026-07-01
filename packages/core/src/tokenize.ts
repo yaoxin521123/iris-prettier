@@ -129,10 +129,6 @@ export function mapCodeSegments(
     }
     code = formatColonAtSegmentEdges(code, prev, next);
     code = formatCommaAtSegmentEdges(code, prev, next);
-    if (next?.type === "string" && next.text.startsWith('"')) {
-      // 包含运算符 '[' 与字面量分属两段时：'["x" → '[ "x"
-      code = code.replace(/'\[$/, "'[ ");
-    }
     if (next?.type === "string") {
       // 保留 ObjectScript 不等于运算符 '=，仅对普通赋值 = 加空格
       // `if +sortNum=0 s index="1"` 中 `+变量=` 不加空格
