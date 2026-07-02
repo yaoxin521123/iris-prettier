@@ -54,9 +54,14 @@ const STANDALONE_COMMAND_ABBREV = new Set(
   Object.values(COMMAND_CANONICAL).map((v) => v.toLowerCase())
 );
 
+/** 方法名：支持 `%OnNew` 等系统方法 */
+const METHOD_NAME = "[%]?[A-Za-z][\\w]*";
+
 /** 方法声明；允许 `As %Status [ PlaceAfter = X ]` 等类元数据 */
-const METHOD_HEADER =
-  /^(ClassMethod|Method)\s+(\w+)\s*(\([^)]*\))?\s*(As\s+[\w.%]+)?\s*(\[[^\]]*\])?\s*$/i;
+const METHOD_HEADER = new RegExp(
+  `^(ClassMethod|Method)\\s+(${METHOD_NAME})\\s*(\\([^)]*\\))?\\s*(As\\s+[\\w.%]+)?\\s*(\\[[^\\]]*\\])?\\s*$`,
+  "i"
+);
 
 const POSTFIX_CMD = /^(q|continue|b|g|goto|s|d)\s*:/i;
 
@@ -135,7 +140,10 @@ export function expandBlockCommands(line: string): string {
 /** Format method signature: spaces after commas in parameter list. */
 export function formatMethodHeader(line: string): string {
   const m = line.match(
-    /^(\s*)(ClassMethod|Method)(\s+)(\w+)(\s*)(\(([^)]*)\))?(\s*As\s+[\w.%]+)?(\s*\[[^\]]*\])?\s*$/i
+    new RegExp(
+      `^(\\s*)(ClassMethod|Method)(\\s+)(${METHOD_NAME})(\\s*)(\\(([^)]*)\\))?(\\s*As\\s+[\\w.%]+)?(\\s*\\[[^\\]]*\\])?\\s*$`,
+      "i"
+    )
   );
   if (!m) return line;
   const [, sp, kw, s1, name, , , params, ret, attrs] = m;
@@ -1476,6 +1484,21 @@ function formatConditionSpacingInCode(code: string): string {
 
 export function isMethodHeader(line: string): boolean {
   return METHOD_HEADER.test(line.trim());
+}
+
+/**
+ * IRIS 类成员声明行。
+ * 含 Parameter、Property、Index、Query、Trigger、Storage、XData、Projection、
+ * Relationship、ForeignKey、Constraint 及 Method/ClassMethod 等。
+ */
+export function isClassMemberDeclaration(line: string): boolean {
+  const t = line.trim();
+  if (isMethodHeader(t)) {
+    return true;
+  }
+  return /^(Parameter|Property|Relationship|Index|ForeignKey|Foreign\s+Key|Query|Trigger|Storage|XData|Projection|Constraint)\b/i.test(
+    t
+  );
 }
 
 /**

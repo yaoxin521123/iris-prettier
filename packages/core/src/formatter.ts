@@ -11,6 +11,7 @@ import {
   applyLineSpacingPreservingPostfix,
   isBlank,
   isMethodHeader,
+  isClassMemberDeclaration,
   isRoutineLabelLine,
   formatRoutineLabelLine,
   isDisabledOrCommentLine,
@@ -49,6 +50,27 @@ function opensBlock(line: string): boolean {
 
 function isCloseElseBranch(line: string): boolean {
   return /^\}\s*(else|elseif|catch)\b/i.test(line.trim());
+}
+
+function isClassDeclaration(line: string): boolean {
+  const t = line.trim();
+  return /^Class\b/i.test(t) && !/^ClassMethod\b/i.test(t);
+}
+
+function ensureBlankLineBefore(output: string[]): void {
+  const lastOut = output[output.length - 1] ?? "";
+  if (lastOut !== "") {
+    output.push("");
+  }
+}
+
+function isLastNonBlankLine(lines: string[], index: number): boolean {
+  for (let j = index + 1; j < lines.length; j++) {
+    if (!isBlank(lines[j]!)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function methodIndent(level: number, unit: string): string {
@@ -156,6 +178,31 @@ function formatLineContent(line: string, options: FormatOptions): string {
 
 function needsSectionBlankBefore(line: string): boolean {
   return /^\s*(ts|TSTART|tc|TCOMMIT)\b/i.test(line) || /^\s*#;/.test(line);
+}
+
+function nextNonBlankTrimmed(lines: string[], from: number): string {
+  for (let j = from + 1; j < lines.length; j++) {
+    if (!isBlank(lines[j]!)) {
+      return lines[j]!.trim();
+    }
+  }
+  return "";
+}
+
+/** 跳过连续 `///`，找到其文档所描述的类成员声明行 */
+function nextClassMemberTrimmed(lines: string[], from: number): string {
+  for (let j = from + 1; j < lines.length; j++) {
+    const line = lines[j]!;
+    if (isBlank(line)) {
+      continue;
+    }
+    const t = line.trim();
+    if (isDocCommentLine(line)) {
+      continue;
+    }
+    return t;
+  }
+  return "";
 }
 
 /** 将 `if (a)&&\n(b)||(c) {` 等多行条件合并为一行 */
@@ -271,6 +318,7 @@ export function formatObjectScript(
   const output: string[] = [];
   let depth = 0;
   let inMethodBody = false;
+  let inClassBody = false;
   let pendingMethodBrace = false;
   /** 方法体内嵌套块层级（1 = 方法直接子级，每多一层 { 加 1） */
   let methodBraceDepth = 0;
@@ -309,6 +357,7 @@ export function formatObjectScript(
         output.length > 0 &&
         lastOut !== "" &&
         lastOut !== "{" &&
+        !isDocCommentLine(lastOut) &&
         !isDisabledOrCommentLine(lastOut)
       ) {
         output.push("");
@@ -321,6 +370,7 @@ export function formatObjectScript(
     }
 
     if (trimmed === "{") {
+      const prevTrim = output[output.length - 1]?.trim() ?? "";
       if (pendingMethodBrace) {
         output.push("{");
         inMethodBody = true;
@@ -331,6 +381,9 @@ export function formatObjectScript(
         methodBraceDepth++;
       } else {
         output.push("{");
+        if (isClassDeclaration(prevTrim)) {
+          inClassBody = true;
+        }
       }
       depth++;
       i++;
@@ -338,8 +391,8 @@ export function formatObjectScript(
     }
 
     if (trimmed === "}") {
-      depth = Math.max(0, depth - 1);
       if (inMethodBody) {
+        depth = Math.max(0, depth - 1);
         if (methodBraceDepth > 1) {
           methodBraceDepth--;
           output.push(methodIndent(methodBraceDepth, unit) + "}");
@@ -349,6 +402,15 @@ export function formatObjectScript(
           inMethodBody = false;
         }
       } else {
+        const closesClass =
+          inClassBody &&
+          !inMethodBody &&
+          isLastNonBlankLine(lines, i);
+        if (closesClass) {
+          ensureBlankLineBefore(output);
+          inClassBody = false;
+        }
+        depth = Math.max(0, depth - 1);
         output.push("}");
       }
       i++;
@@ -361,6 +423,7 @@ export function formatObjectScript(
       output.push(methodIndent(methodBraceDepth, unit) + branchLine);
       if (opensBlock(branchLine)) {
         methodBraceDepth++;
+        depth++;
       }
       i++;
       continue;
@@ -381,6 +444,11 @@ export function formatObjectScript(
     }
 
     if (isDocCommentLine(raw) && !inMethodBody) {
+      const memberTrim = nextClassMemberTrimmed(lines, i);
+      const lastOut = output[output.length - 1] ?? "";
+      if (isClassMemberDeclaration(memberTrim) && !isDocCommentLine(lastOut)) {
+        ensureBlankLineBefore(output);
+      }
       output.push(formatLineContent(trimmed, options));
       i++;
       continue;
@@ -421,6 +489,12 @@ export function formatObjectScript(
 
     for (const fl of formattedLines) {
       if (!inMethodBody) {
+        if (inClassBody && isClassMemberDeclaration(fl.trim())) {
+          const lastOut = output[output.length - 1] ?? "";
+          if (!isDocCommentLine(lastOut)) {
+            ensureBlankLineBefore(output);
+          }
+        }
         output.push(fl);
         continue;
       }
@@ -428,6 +502,7 @@ export function formatObjectScript(
       output.push(methodIndent(indentLevel, unit) + fl);
       if (opensBlock(fl)) {
         methodBraceDepth++;
+        depth++;
       }
     }
     i++;

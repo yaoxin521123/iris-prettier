@@ -734,7 +734,7 @@ function convertMethodBodyRecursive(
 }
 
 const METHOD_HEADER =
-  /^(ClassMethod|Method)\s+(\w+)\s*(\([^)]*\))?\s*(As\s+[\w.%]+)?\s*(\[[^\]]*\])?\s*$/i;
+  /^(ClassMethod|Method)\s+([%]?[A-Za-z][\w]*)\s*(\([^)]*\))?\s*(As\s+[\w.%]+)?\s*(\[[^\]]*\])?\s*$/i;
 
 function parseMethodHeaderLine(trimmed: string): {
   headerLine: string;

@@ -23,7 +23,7 @@ function parseMethodHeaderLine(trimmed: string): {
 }
 
 function methodNameFromHeader(headerLine: string): string {
-  const m = headerLine.match(/^(?:ClassMethod|Method)\s+(\w+)/i);
+  const m = headerLine.match(/^(?:ClassMethod|Method)\s+([%]?[A-Za-z][\w]*)/i);
   return m?.[1] ?? "Unknown";
 }
 

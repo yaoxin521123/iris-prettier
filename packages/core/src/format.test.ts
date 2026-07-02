@@ -614,6 +614,120 @@ q $$$OK
     expect(out).toMatch(/\n\tif ind = "" \{/);
     expect(out).toMatch(/\n\tq \$\$\$OK/);
   });
+
+  it("indents body for system methods like %OnNew", () => {
+    const src = `Method %OnNew() As %Status
+{
+\ts $this.array=##class(%DynamicArray).%New()
+\tQ $this
+}`;
+    const out = format(src);
+    expect(out).toContain("Method %OnNew() As %Status");
+    expect(out).toMatch(/\{\n\ts \$this\.array = ##class\(%DynamicArray\)\.%New\(\)/);
+    expect(out).toMatch(/\n\tq \$this\n\}/);
+  });
+
+  it("inserts blank line between methods when next method has /// doc", () => {
+    const src = `Method %OnNew() As %Status
+{
+\tq 1
+}
+
+/// 从JSON字符串进行构造
+ClassMethod %FromJSON(JsonStr) As DHCDoc.Util.Array
+{
+\tq 2
+}`;
+    const out = format(src);
+    expect(out).toMatch(/\n\tq 1\n\}\n\n\/\/\/ 从JSON字符串进行构造\nClassMethod %FromJSON/);
+  });
+
+  it("inserts blank lines before Property and before class closing brace", () => {
+    const src = `Class DHCDoc.Util.Array Extends %RegisteredObject
+{
+Property array As %DynamicArray [ Private ];
+Method %OnNew() As %Status
+{
+\tq 1
+}
+ClassMethod %FromJSON(JsonStr) As DHCDoc.Util.Array
+{
+\tq 2
+}
+}`;
+    const out = format(src);
+    expect(out).toMatch(/\{\n\nProperty array As %DynamicArray/);
+    expect(out).toMatch(/\n\tq 2\n\}\n\n\}/);
+  });
+
+  it("inserts blank before class closing brace when methods contain inline { blocks", () => {
+    const src = `Class DHCDoc.Util.Array Extends %RegisteredObject
+{
+ClassMethod %FromStr(Str As %String, Separator As %String = ", ") As DHCDoc.Util.Array
+{
+\ts arr = ##class(DHCDoc.Util.Array).%New()
+\tfor i = 1 : 1 : $l(Str, Separator) {
+\t\td arr.array.%Push($p(Str, Separator, i))
+\t}
+\tq arr
+}
+ClassMethod Test()
+{
+\tq ""
+}
+}`;
+    const out = format(src);
+    expect(out).toMatch(/\n\tq ""\n\}\n\n\}/);
+    expect(out).toMatch(/for i = 1 : 1 : \$l\(Str, Separator\) \{/);
+  });
+
+  it("keeps /// doc attached to class members with blank between member groups", () => {
+    const src = `Class DHCDoc.Util.Array Extends %RegisteredObject
+{
+/// 11
+Parameter apple;
+/// 属性
+Property array As %DynamicArray [ Private ];
+Method %OnNew() As %Status
+{
+\tq 1
+}
+Index NameIdx On array;
+}`;
+    const out = format(src);
+    expect(out).toMatch(/\{\n\n\/\/\/ 11\nParameter apple;/);
+    expect(out).toMatch(/Parameter apple;\n\n\/\/\/ 属性\nProperty array/);
+    expect(out).not.toMatch(/\/\/\/ 11\n\nParameter/);
+    expect(out).not.toMatch(/\/\/\/ 属性\n\nProperty/);
+    expect(out).toMatch(/\n\tq 1\n\}\n\nIndex NameIdx/);
+    expect(out).toMatch(/Index NameIdx On array;\n\n\}/);
+  });
+
+  it("inserts blank before multi-line /// doc blocks at class level", () => {
+    const src = `Class DHCDoc.Util.Array Extends %RegisteredObject
+{
+/// 2
+/// 11
+Parameter apple;
+/// 2323
+/// 22323
+/// 属性
+Property array As %DynamicArray [ Private ];
+/// 属性
+/// 属性
+/// 属性
+Method %OnNew() As %Status
+{
+\tq 1
+}
+}`;
+    const out = format(src);
+    expect(out).toMatch(/\{\n\n\/\/\/ 2\n\/\/\/ 11\nParameter apple;/);
+    expect(out).toMatch(/Parameter apple;\n\n\/\/\/ 2323\n\/\/\/ 22323\n\/\/\/ 属性\nProperty array/);
+    expect(out).toMatch(/Property array[\s\S]*\n\n\/\/\/ 属性\n\/\/\/ 属性\n\/\/\/ 属性\nMethod %OnNew/);
+    expect(out).not.toMatch(/\/\/\/ 2\n\n\/\/\/ 11/);
+    expect(out).not.toMatch(/\/\/\/ 2323\n\n\/\/\/ 22323/);
+  });
 });
 
 describe("routine labels", () => {
@@ -1280,16 +1394,19 @@ ClassMethod Other() As %Status
 }`;
     const expected = `Class DHCDoc.Util.Class Extends %RegisteredObject
 {
+
 /// w ##class(DHCDoc.Util.Class).CompileList(.a)
 ClassMethod CompileList(ByRef tItemArray As %String) As %Status
 {
 \tq ""
 }
+
 /// doc for next method
 ClassMethod Other() As %Status
 {
 \tq $$$OK
 }
+
 }`;
     expect(format(src)).toBe(expected);
   });
@@ -1307,6 +1424,7 @@ ClassMethod CompileList() As %Status
 }`;
     const expected = `Class DHCDoc.Util.Class Extends %RegisteredObject
 {
+
 /// w ##class(DHCDoc.Util.Class).CompileList(.a)
 ClassMethod CompileList() As %Status
 {
@@ -1314,6 +1432,7 @@ ClassMethod CompileList() As %Status
 \t#dim tSC As %Status = $$$OK
 \tq ""
 }
+
 }`;
     expect(format(src)).toBe(expected);
   });

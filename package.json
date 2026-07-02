@@ -1,7 +1,7 @@
 {
   "name": "iris-prettier",
   "private": true,
-  "version": "0.1.5",
+  "version": "0.1.7",
   "description": "Prettier-style formatter for InterSystems IRIS ObjectScript",
   "scripts": {
     "build": "npm run build -w @iris-prettier/core && npm run build -w iris-prettier-vscode",
