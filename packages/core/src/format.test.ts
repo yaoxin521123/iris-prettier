@@ -446,10 +446,22 @@ describe("operator spacing", () => {
     expect(format("if DateFrom'=\"\"  s x = 1\n")).toContain("DateFrom '= \"\"");
     expect(format("if DateFrom'=\"\"  s x = 1\n")).not.toContain("DateFrom' =");
     expect(format("if TimeFrom[\":\"  s x = 1\n")).toContain('TimeFrom [ ":"');
-    expect(format('if (dispqty \'[".")  s dispqty = 1\n')).toContain('[ ".');
+    expect(format('if (dispqty \'[".")  s dispqty = 1\n')).toContain('\'[ ".');
     expect(format("if AdmHosp>0  s x = 1\n")).toContain("AdmHosp > 0");
     expect(format("if x>=1  s y = 2\n")).toContain("x>= 1");
     expect(format(".i (Ingd<= 0)  s Ret = Ingd q\n")).toContain("(Ingd <= 0)");
+  });
+
+  it("preserves does-not-contain operator '[", () => {
+    expect(format('if (objItem.Titles \'[ "%DT%")  s x = 1\n')).toContain(
+      'Titles \'[ "%DT%"'
+    );
+    expect(format('if (objItem.Titles\'["%DT%")  s x = 1\n')).toContain(
+      'Titles \'[ "%DT%"'
+    );
+    expect(format('if (objItem.Titles \'[ "%DT%")  s x = 1\n')).not.toMatch(
+      /Titles\s+\[\s+"/
+    );
   });
 
   it("removes spaces around && and || in if conditions", () => {

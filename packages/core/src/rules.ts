@@ -309,10 +309,14 @@ export function formatColonSpacing(code: string): string {
  * 判断/比较运算符两侧空格：'=、'[、>=、<=、>、<
  * - '> / '< / '= / '[：操作数与 ' 之间有空格，' 与运算符紧贴：DateFrom '= ""
  */
-/** `VIPDesc["VIP"` → `VIPDesc [ "VIP"`（包含运算符：`[` 两侧空格，不加 `'`） */
+/**
+ * 包含 / 不包含运算符空格：
+ * - `[` 包含：`VIPDesc["VIP"` → `VIPDesc [ "VIP"`
+ * - `'[` 不包含：保留 `'`，`Titles'["%DT%"` → `Titles '[ "%DT%"`
+ */
 export function normalizeContainsBracketSyntax(code: string): string {
   return code
-    .replace(/(\w+)\s*'\[\s*"([^"]*)"/g, '$1 [ "$2"')
+    .replace(/(\w+)\s*'\[\s*"([^"]*)"/g, '$1 \'[ "$2"')
     .replace(/(\w+)\[\s*"([^"]*)"/g, '$1 [ "$2"')
     .replace(/\)\[([%]?[A-Za-z_]\w*)/g, (_m, id: string) => `) [${id}`);
 }
