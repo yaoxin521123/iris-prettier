@@ -639,6 +639,29 @@ q $$$OK
     expect(out).toMatch(/\n\tq \$this\n\}/);
   });
 
+  it("strips zero-width chars in method names so body still indents", () => {
+    // U+200C between Recur and TemplateJson (common paste artifact)
+    const zw = "\u200c";
+    const src = `Class EMR.DOC.TOOL.RepairTemplateData Extends %RegisteredObject
+{
+ClassMethod Recur${zw}TemplateJson(ByRef ATemplateData As %DynamicObject) As %String
+{
+\ts x = 1
+\tif (a = 1)
+\t{
+\t\ts y = 2
+\t}
+\td ..Recur${zw}TemplateJson(value)
+}
+}`;
+    const out = format(src);
+    expect(out).toContain("ClassMethod RecurTemplateJson(");
+    expect(out).not.toContain(zw);
+    expect(out).toMatch(/\{\n\ts x = 1/);
+    expect(out).toMatch(/\n\tif \(a = 1\)/);
+    expect(out).toContain("d ..RecurTemplateJson(value)");
+  });
+
   it("inserts blank line between methods when next method has /// doc", () => {
     const src = `Method %OnNew() As %Status
 {

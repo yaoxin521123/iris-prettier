@@ -292,12 +292,19 @@ function joinCloseElseBranchLines(lines: string[]): string[] {
   return result;
 }
 
+/** 粘贴进源码的零宽字符会破坏方法名匹配（如 U+200C 导致体不缩进） */
+function stripInvisibleFormatChars(text: string): string {
+  return text.replace(/[\u200B-\u200D\u2060\uFEFF]/g, "");
+}
+
 export function formatObjectScript(
   source: string,
   partial?: Partial<FormatOptions>
 ): FormatResult {
   const options = mergeOptions(partial);
-  let normalized = source.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  let normalized = stripInvisibleFormatChars(
+    source.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+  );
   if (options.convertDotSyntax) {
     const { text } = formatObjectScript(source, {
       ...options,
